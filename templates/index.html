@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Crew Assistant — Equipa de Agentes IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+  <div class="app">
+
+    <header class="app__header">
+      <div class="header__title">
+        <span class="header__eyebrow">EQUIPA DE AGENTES</span>
+        <h1>Crew Assistant</h1>
+      </div>
+
+      <div class="relay" id="relay">
+        <div class="relay__track"></div>
+        <div class="relay__progress" id="relayProgress"></div>
+
+        <div class="relay__node" data-node="coordenador">
+          <div class="relay__dot"></div>
+          <span class="relay__label">Coordenador</span>
+        </div>
+        <div class="relay__node" data-node="pesquisador">
+          <div class="relay__dot"></div>
+          <span class="relay__label">Pesquisador</span>
+        </div>
+        <div class="relay__node" data-node="especialista">
+          <div class="relay__dot"></div>
+          <span class="relay__label">Especialista</span>
+        </div>
+        <div class="relay__node" data-node="redator">
+          <div class="relay__dot"></div>
+          <span class="relay__label">Redator</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="chat" id="chat">
+      <div class="chat__empty" id="chatEmpty">
+        <p class="chat__empty-eyebrow">EM ESPERA</p>
+        <p class="chat__empty-title">Envia uma mensagem para acionar a equipa</p>
+        <p class="chat__empty-sub">Coordenador → Pesquisador → Especialista → Redator</p>
+      </div>
+    </main>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <input
+        type="text"
+        id="messageInput"
+        class="composer__input"
+        placeholder="Escreve a tua mensagem..."
+        autocomplete="off"
+      />
+      <button type="submit" class="composer__send" id="sendBtn">
+        <span>Enviar</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M4 12H20M20 12L14 6M20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </form>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
