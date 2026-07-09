@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Crew Assistant — Equipa de Agentes IA</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
@@ -33,14 +34,27 @@
       <header class="app__header">
 
         <div class="header__top">
-          <div class="header__title">
-            <span class="header__eyebrow">EQUIPA DE AGENTES</span>
-            <h1>Crew Assistant</h1>
+
+          <div class="header__brand">
+
+            <img src="{{ url_for('static', filename='img/logo.png') }}" class="logo" alt="Crew Assistant">
+
+            <div>
+
+              <p class="header__eyebrow">
+                EQUIPA DE AGENTES
+              </p>
+
+              <h1>Crew Assistant</h1>
+
+            </div>
+
           </div>
 
-          <button id="themeToggle" class="theme-toggle" title="Alterar tema">
+          <button id="themeToggle" class="theme-toggle">
             <span id="themeIcon">🌙</span>
           </button>
+
         </div>
 
         <div class="relay" id="relay">
