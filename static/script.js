@@ -1,3 +1,5 @@
+const newChatBtn = document.getElementById("newChatBtn");
+const historyEl = document.getElementById("chatHistory");
 const themeToggle = document.getElementById("themeToggle");
 const themeIcon = document.getElementById("themeIcon");
 const chatEl = document.getElementById('chat');
@@ -20,8 +22,149 @@ const AGENT_ROLE_TO_NODE = {
   'Redator Final': 'redator',
 };
 
+let conversations =
+  JSON.parse(localStorage.getItem("crew_conversations")) || [];
+
+let currentConversation = [];
 let sessionId = localStorage.getItem('crew_session_id') || null;
 let pendingAttachments = []; // { name, dataUrl }
+
+function saveHistory() {
+
+  if (currentConversation.length === 0) return;
+
+  if (
+    conversations.length &&
+    JSON.stringify(conversations[0].messages) === JSON.stringify(currentConversation)
+  ) {
+    return;
+  }
+
+  conversations.unshift({
+    title: currentConversation[0].text.substring(0, 40),
+    messages: [...currentConversation]
+  });
+
+  localStorage.setItem(
+    "crew_conversations",
+    JSON.stringify(conversations)
+  );
+
+  renderHistory();
+
+}
+
+function renderHistory() {
+
+  historyEl.innerHTML = "";
+
+  conversations.forEach((conv, index) => {
+
+    const item = document.createElement("div");
+    item.className = "chat-item";
+
+    const title = document.createElement("span");
+    title.className = "chat-item-title";
+    title.textContent = conv.title;
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "chat-delete";
+    deleteBtn.innerHTML = "🗑️";
+    deleteBtn.title = "Eliminar conversa";
+
+    deleteBtn.onclick = (e) => {
+
+      e.stopPropagation();
+
+      if (!confirm("Pretende eliminar esta conversa?"))
+        return;
+
+      conversations.splice(index, 1);
+
+      localStorage.setItem(
+        "crew_conversations",
+        JSON.stringify(conversations)
+      );
+
+      renderHistory();
+
+    };
+
+    item.onclick = () => loadConversation(index);
+
+    item.appendChild(title);
+    item.appendChild(deleteBtn);
+
+    historyEl.appendChild(item);
+
+  });
+
+}
+
+function deleteConversation(index) {
+
+  if (!confirm("Eliminar esta conversa?"))
+    return;
+
+  conversations.splice(index, 1);
+
+  localStorage.setItem(
+    "crew_conversations",
+    JSON.stringify(conversations)
+  );
+
+  renderHistory();
+
+}
+
+function clearConversation() {
+
+  chatEl.replaceChildren();
+
+  const empty = document.createElement("div");
+
+  empty.className = "chat__empty";
+  empty.id = "chatEmpty";
+
+  empty.innerHTML = `
+        <p class="chat__empty-eyebrow">EQUIPA DE AGENTES</p>
+        <h2 class="chat__empty-title">Como posso ajudar?</h2>
+        <p class="chat__empty-sub">Escreve uma mensagem para começar.</p>
+    `;
+
+  chatEl.appendChild(empty);
+
+}
+
+function loadConversation(index) {
+
+  clearConversation();
+
+  currentConversation = conversations[index].messages;
+
+  currentConversation.forEach(msg => {
+
+    addMessage(msg.text, msg.role);
+
+  });
+
+}
+
+newChatBtn.onclick = () => {
+
+  saveHistory();
+
+  currentConversation = [];
+
+  sessionId = null;
+
+  localStorage.removeItem("crew_session_id");
+
+  clearConversation();
+
+  resetRelay();
+
+};
 
 /* ---------------- Relay (agentes) ---------------- */
 
@@ -30,11 +173,18 @@ function getNodeEl(key) {
 }
 
 function resetRelay() {
+
+  relayProgressEl.style.width = "0%";
+
   NODE_ORDER.forEach((key) => {
+
     const el = getNodeEl(key);
-    el.classList.remove('active', 'done');
+
+    el.classList.remove("active");
+    el.classList.remove("done");
+
   });
-  relayProgressEl.style.width = '0%';
+
 }
 
 function setNodeActive(key) {
@@ -161,29 +311,29 @@ function addProgressMessage(text) {
 
 /* ---------------- Tema ---------------- */
 
-function applyTheme(theme){
+function applyTheme(theme) {
 
-    if(theme === "light"){
-        document.body.classList.add("light-mode");
-        themeIcon.textContent = "☀️";
-    }else{
-        document.body.classList.remove("light-mode");
-        themeIcon.textContent = "🌙";
-    }
+  if (theme === "light") {
+    document.body.classList.add("light-mode");
+    themeIcon.textContent = "☀️";
+  } else {
+    document.body.classList.remove("light-mode");
+    themeIcon.textContent = "🌙";
+  }
 
-    localStorage.setItem("theme", theme);
+  localStorage.setItem("theme", theme);
 }
 
 applyTheme(localStorage.getItem("theme") || "dark");
 
 themeToggle.addEventListener("click", () => {
 
-    const current =
-        document.body.classList.contains("light-mode")
-            ? "light"
-            : "dark";
+  const current =
+    document.body.classList.contains("light-mode")
+      ? "light"
+      : "dark";
 
-    applyTheme(current === "dark" ? "light" : "dark");
+  applyTheme(current === "dark" ? "light" : "dark");
 
 });
 
@@ -253,6 +403,10 @@ fileInput.addEventListener('change', async (e) => {
 
 async function sendMessage(message, images) {
   addUserMessageWithAttachments(message, images);
+  currentConversation.push({
+    role: "user",
+    text: message || "[Imagem]"
+  });
   resetRelay();
   // O primeiro nó só acende quando soubermos (pela 1ª mensagem do servidor)
   // se este pedido vai pelo pipeline de texto, imagem ou anexos.
@@ -309,14 +463,29 @@ async function sendMessage(message, images) {
         } else if (payload.type === 'final') {
           sessionId = payload.session_id;
           localStorage.setItem('crew_session_id', sessionId);
+
           progressEl.remove();
-          addMessage(payload.reply, 'assistant');
+
+          addMessage(payload.reply, "assistant");
+
+          currentConversation.push({
+            role: "assistant",
+            text: payload.reply
+          });
+
           NODE_ORDER.forEach((k) => markNodeDone(k));
         } else if (payload.type === 'image') {
           sessionId = payload.session_id;
           localStorage.setItem('crew_session_id', sessionId);
+
           progressEl.remove();
+
           addImageMessage(payload.image_base64, payload.prompt_used);
+
+          currentConversation.push({
+            role: "assistant",
+            text: "[Imagem Gerada]"
+          });
         } else if (payload.type === 'error') {
           progressEl.remove();
           addMessage('Ocorreu um erro: ' + payload.message, 'assistant');
@@ -345,4 +514,5 @@ composerEl.addEventListener('submit', (e) => {
   renderAttachmentsPreview();
 
   sendMessage(message, images);
+  renderHistory();
 });
