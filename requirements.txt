@@ -1,6 +1,9 @@
-crewai==0.86.0
-crewai-tools==0.17.0
+crewai>=1.15.0,<2.0.0
 flask==3.0.3
 flask-cors==4.0.1
 python-dotenv==1.0.1
-litellm==1.53.1
+litellm
+requests
+pytesseract
+Pillow
+pypdf
