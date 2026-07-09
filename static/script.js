@@ -4,6 +4,9 @@ const composerEl = document.getElementById('composer');
 const inputEl = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const relayProgressEl = document.getElementById('relayProgress');
+const attachBtn = document.getElementById('attachBtn');
+const fileInput = document.getElementById('fileInput');
+const attachmentsPreviewEl = document.getElementById('attachmentsPreview');
 
 const NODE_ORDER = ['coordenador', 'pesquisador', 'especialista', 'redator'];
 
@@ -16,6 +19,9 @@ const AGENT_ROLE_TO_NODE = {
 };
 
 let sessionId = localStorage.getItem('crew_session_id') || null;
+let pendingAttachments = []; // { name, dataUrl }
+
+/* ---------------- Relay (agentes) ---------------- */
 
 function getNodeEl(key) {
   return document.querySelector(`.relay__node[data-node="${key}"]`);
@@ -53,6 +59,8 @@ function markNodeDone(key) {
   if (nextKey) setNodeActive(nextKey);
 }
 
+/* ---------------- Chat helpers ---------------- */
+
 function scrollToBottom() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
@@ -62,6 +70,78 @@ function addMessage(text, role) {
   const div = document.createElement('div');
   div.className = `msg msg--${role}`;
   div.textContent = text;
+  chatEl.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function addUserMessageWithAttachments(text, images) {
+  if (chatEmptyEl) chatEmptyEl.remove();
+  const div = document.createElement('div');
+  div.className = 'msg msg--user';
+
+  if (images && images.length) {
+    const grid = document.createElement('div');
+    grid.className = 'msg__attachments';
+    images.forEach((src) => {
+      const img = document.createElement('img');
+      img.src = src;
+      grid.appendChild(img);
+    });
+    div.appendChild(grid);
+  }
+
+  if (text) {
+    const p = document.createElement('p');
+    p.className = 'msg__text';
+    p.textContent = text;
+    div.appendChild(p);
+  }
+
+  chatEl.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function addImageMessage(imageBase64, promptUsed) {
+  if (chatEmptyEl) chatEmptyEl.remove();
+  const wrapper = document.createElement('div');
+  wrapper.className = 'msg msg--assistant msg--image';
+
+  const img = document.createElement('img');
+  img.src = `data:image/png;base64,${imageBase64}`;
+  img.alt = promptUsed || 'Imagem gerada';
+  img.className = 'msg__image';
+
+  const caption = document.createElement('p');
+  caption.className = 'msg__caption';
+  caption.textContent = promptUsed;
+
+  wrapper.appendChild(img);
+  wrapper.appendChild(caption);
+  chatEl.appendChild(wrapper);
+  scrollToBottom();
+  return wrapper;
+}
+
+function addPdfMessage(pdfFilename, downloadUrl, pages) {
+  if (chatEmptyEl) chatEmptyEl.remove();
+  const div = document.createElement('div');
+  div.className = 'msg msg--assistant msg--pdf';
+
+  const p = document.createElement('p');
+  p.className = 'msg__text';
+  p.textContent = `📎 PDF criado com ${pages} página(s).`;
+
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.className = 'msg__pdf-link';
+  link.textContent = `⬇️ Descarregar ${pdfFilename}`;
+
+  div.appendChild(p);
+  div.appendChild(link);
   chatEl.appendChild(div);
   scrollToBottom();
   return div;
@@ -77,21 +157,88 @@ function addProgressMessage(text) {
   return div;
 }
 
-async function sendMessage(message) {
-  addMessage(message, 'user');
+/* ---------------- Anexos ---------------- */
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderAttachmentsPreview() {
+  attachmentsPreviewEl.innerHTML = '';
+
+  if (pendingAttachments.length === 0) {
+    attachmentsPreviewEl.classList.remove('attachments--visible');
+    return;
+  }
+
+  attachmentsPreviewEl.classList.add('attachments--visible');
+
+  pendingAttachments.forEach((att, idx) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'attachment-thumb';
+
+    const img = document.createElement('img');
+    img.src = att.dataUrl;
+    img.alt = att.name;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'attachment-thumb__remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remover';
+    removeBtn.addEventListener('click', () => {
+      pendingAttachments.splice(idx, 1);
+      renderAttachmentsPreview();
+    });
+
+    thumb.appendChild(img);
+    thumb.appendChild(removeBtn);
+    attachmentsPreviewEl.appendChild(thumb);
+  });
+}
+
+attachBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    try {
+      const dataUrl = await readFileAsDataURL(file);
+      pendingAttachments.push({ name: file.name, dataUrl });
+    } catch (err) {
+      console.error('Erro a ler ficheiro', err);
+    }
+  }
+  fileInput.value = '';
+  renderAttachmentsPreview();
+});
+
+/* ---------------- Envio de mensagens ---------------- */
+
+async function sendMessage(message, images) {
+  addUserMessageWithAttachments(message, images);
   resetRelay();
-  setNodeActive(NODE_ORDER[0]);
+  // O primeiro nó só acende quando soubermos (pela 1ª mensagem do servidor)
+  // se este pedido vai pelo pipeline de texto, imagem ou anexos.
 
   sendBtn.disabled = true;
   inputEl.disabled = true;
 
-  const progressEl = addProgressMessage('🧭 Coordenador a analisar o pedido...');
+  const progressEl = addProgressMessage(
+    images.length ? '📎 A preparar os anexos...' : '🧭 Coordenador a analisar o pedido...'
+  );
 
   try {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, session_id: sessionId }),
+      body: JSON.stringify({ message, images, session_id: sessionId }),
     });
 
     const reader = response.body.getReader();
@@ -124,15 +271,25 @@ async function sendMessage(message) {
           if (nodeKey) markNodeDone(nodeKey);
           progressEl.textContent = payload.label;
           scrollToBottom();
+        } else if (payload.type === 'image_progress' || payload.type === 'attachment_progress') {
+          progressEl.textContent = payload.label;
+          scrollToBottom();
+        } else if (payload.type === 'attachment_done') {
+          addPdfMessage(payload.pdf_filename, payload.download_url, payload.pages);
         } else if (payload.type === 'final') {
           sessionId = payload.session_id;
           localStorage.setItem('crew_session_id', sessionId);
           progressEl.remove();
           addMessage(payload.reply, 'assistant');
           NODE_ORDER.forEach((k) => markNodeDone(k));
+        } else if (payload.type === 'image') {
+          sessionId = payload.session_id;
+          localStorage.setItem('crew_session_id', sessionId);
+          progressEl.remove();
+          addImageMessage(payload.image_base64, payload.prompt_used);
         } else if (payload.type === 'error') {
           progressEl.remove();
-          addMessage('Ocorreu um erro ao contactar a equipa de agentes: ' + payload.message, 'assistant');
+          addMessage('Ocorreu um erro: ' + payload.message, 'assistant');
         }
       }
     }
@@ -149,7 +306,13 @@ async function sendMessage(message) {
 composerEl.addEventListener('submit', (e) => {
   e.preventDefault();
   const message = inputEl.value.trim();
-  if (!message) return;
+  const images = pendingAttachments.map((a) => a.dataUrl);
+
+  if (!message && images.length === 0) return;
+
   inputEl.value = '';
-  sendMessage(message);
+  pendingAttachments = [];
+  renderAttachmentsPreview();
+
+  sendMessage(message, images);
 });

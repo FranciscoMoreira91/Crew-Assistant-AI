@@ -34,15 +34,18 @@ toda a equipa.
 
 ```
 crew_chatbot/
-├── app.py              # Servidor Flask (API + streaming SSE de progresso)
-├── crew_agents.py       # Definição dos agentes, tarefas e da crew
+├── app.py               # Servidor Flask (API, streaming SSE, rotas de texto/imagem/anexos)
+├── crew_agents.py        # Definição dos agentes, tarefas e da crew (texto)
+├── image_tool.py         # Geração de imagens via AUTOMATIC1111 local
+├── ocr_tool.py            # OCR de anexos + junção num PDF pesquisável
 ├── requirements.txt
-├── .env.example         # Copiar para .env e preencher a chave da API
+├── .env.example           # Copiar para .env e preencher a chave da API
+├── PDF/                    # PDFs gerados a partir de imagens anexadas no chat
 ├── templates/
-│   └── index.html       # Página do chat
+│   └── index.html         # Página do chat
 └── static/
-    ├── style.css         # Design (tema navy/indigo + relay animado)
-    └── script.js         # Lógica do chat (fetch + streaming)
+    ├── style.css           # Design (tema navy/indigo + relay animado)
+    └── script.js           # Lógica do chat (fetch + streaming + anexos)
 ```
 
 ## Instalação
@@ -88,6 +91,64 @@ Depois abre o browser em: **http://localhost:5000**
   from crewai_tools import SerperDevTool
   pesquisador = Agent(..., tools=[SerperDevTool()])
   ```
+
+## Anexos: OCR + junção em PDF
+
+No chat, junto ao campo de texto, existe um botão de clip (📎) que permite
+anexar uma ou mais imagens (fotos de documentos, recibos, páginas de livros,
+etc.). Ao enviar:
+
+1. O backend faz **OCR** a cada imagem (com Tesseract, via `pytesseract`).
+2. Junta todas as imagens num **único PDF pesquisável** (cada imagem numa
+   página, com o texto OCR embutido como camada invisível — dá para
+   selecionar/pesquisar texto no PDF final).
+3. Guarda o PDF na pasta **`PDF/`** na raiz do projeto, com o nome
+   `anexos_AAAAMMDD_HHMMSS.pdf`.
+4. Se também escreveste uma mensagem de texto junto com as imagens (ex:
+   "resume este documento"), o texto extraído por OCR é passado como
+   contexto extra à equipa de agentes, para que a resposta final já tenha
+   em conta o conteúdo das imagens.
+
+**Pré-requisito: o motor Tesseract OCR** (não é só um pacote Python, é
+software à parte):
+
+- Windows: descarrega o instalador em
+  https://github.com/UB-Mannheim/tesseract/wiki (escolhe a versão de 64-bit).
+  Durante a instalação, na secção de "Additional language data", marca
+  também **Portuguese** (para OCR em português).
+- Depois de instalado, se o comando `tesseract` não for reconhecido no
+  PowerShell, define no `.env` o caminho completo do executável:
+  ```
+  TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
+  ```
+
+Os ficheiros relevantes são `ocr_tool.py` (OCR + criação do PDF) e as
+mesmas rotas de `app.py` usadas para o chat.
+
+## Geração de imagens (opcional)
+
+Se o pedido do humano parecer um pedido de imagem (ex: "desenha um cavalo",
+"gera uma imagem de..."), o backend deteta isso automaticamente e, em vez de
+acionar a crew de agentes de texto, faz o seguinte:
+
+1. Usa o LLM já configurado (ex: `ollama/gnokit/improve-prompt`) para
+   transformar o pedido num bom prompt de Stable Diffusion, em inglês.
+2. Envia esse prompt para o **AUTOMATIC1111** local (`SD_API_URL` no `.env`,
+   por omissão `http://127.0.0.1:7860`).
+3. Devolve a imagem gerada ao chat.
+
+**Pré-requisito:** o AUTOMATIC1111 (stable-diffusion-webui) tem de estar a
+correr localmente com a flag `--api` ativa:
+
+```
+set COMMANDLINE_ARGS=--api --xformers --medvram
+```
+
+Sem isto a correr, os pedidos de texto continuam a funcionar normalmente —
+só os pedidos de imagem vão falhar com uma mensagem de erro no chat.
+
+Os ficheiros relevantes são `image_tool.py` (comunicação com a API do
+AUTOMATIC1111 e refinamento do prompt) e as rotas em `app.py`.
 
 ## Personalizar
 
