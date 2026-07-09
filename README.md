@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="static/img/logo.png" width="220">
+</p>
+
 # Crew Assistant — Chatbot multi-agente com CrewAI
 
 Projeto de exemplo com **vários agentes CrewAI** que colaboram entre si para
