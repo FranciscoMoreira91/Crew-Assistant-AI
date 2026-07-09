@@ -1,3 +1,15 @@
+body.light-mode {
+    --bg: #f5f7fb;
+    --panel: #ffffff;
+    --panel-alt: #eef2f7;
+    --border: #d8dee8;
+    --text: #1b2430;
+    --text-muted: #667085;
+    --accent-active: #f59e0b;
+    --accent-done: #10b981;
+    --accent-user: #3b82f6;
+}
+
 :root {
   --bg: #0F1420;
   --panel: #171F2E;
@@ -37,6 +49,32 @@ html, body {
 }
 
 /* ---------- Header ---------- */
+
+.header__top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+}
+
+.theme-toggle{
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    border:1px solid var(--border);
+    background:var(--panel);
+    color:var(--text);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+    transition:.25s;
+}
+
+.theme-toggle:hover{
+    transform:rotate(15deg) scale(1.08);
+    background:var(--panel-alt);
+}
 
 .app__header {
   padding-bottom: 20px;
