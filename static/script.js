@@ -1,3 +1,5 @@
+const themeToggle = document.getElementById("themeToggle");
+const themeIcon = document.getElementById("themeIcon");
 const chatEl = document.getElementById('chat');
 const chatEmptyEl = document.getElementById('chatEmpty');
 const composerEl = document.getElementById('composer');
@@ -156,6 +158,34 @@ function addProgressMessage(text) {
   scrollToBottom();
   return div;
 }
+
+/* ---------------- Tema ---------------- */
+
+function applyTheme(theme){
+
+    if(theme === "light"){
+        document.body.classList.add("light-mode");
+        themeIcon.textContent = "☀️";
+    }else{
+        document.body.classList.remove("light-mode");
+        themeIcon.textContent = "🌙";
+    }
+
+    localStorage.setItem("theme", theme);
+}
+
+applyTheme(localStorage.getItem("theme") || "dark");
+
+themeToggle.addEventListener("click", () => {
+
+    const current =
+        document.body.classList.contains("light-mode")
+            ? "light"
+            : "dark";
+
+    applyTheme(current === "dark" ? "light" : "dark");
+
+});
 
 /* ---------------- Anexos ---------------- */
 
