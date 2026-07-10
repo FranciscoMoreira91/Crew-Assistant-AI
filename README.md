@@ -34,36 +34,6 @@ Cada agente recebe o output dos anteriores como contexto (`context=[...]`
 nas `Task` do CrewAI), pelo que o resultado final já incorpora o trabalho de
 toda a equipa.
 
-## Estrutura do projeto
-
-crew_chatbot/
-├── app.py                      # Servidor Flask (API REST + Streaming SSE)
-├── crew_agents.py              # Definição dos agentes, tarefas e CrewAI
-├── image_tool.py               # Geração de imagens (AUTOMATIC1111)
-├── ocr_tool.py                 # OCR + criação de PDFs pesquisáveis
-├── logger.py                   # Sistema de logs estruturados da Crew
-├── requirements.txt
-├── .env.example                # Configuração das APIs e modelos
-├── README.md
-│
-├── logs/                       # Logs gerados por cada pedido efetuado
-│   └── 20260710_183521.log
-│
-├── PDF/                        # PDFs gerados a partir das imagens anexadas
-│   └── anexos_20260710_183522.pdf
-│
-├── templates/
-│   └── index.html              # Interface principal do chatbot
-│
-└── static/
-    ├── style.css               # Estilos da aplicação (Light/Dark Mode)
-    ├── script.js               # Lógica do chat, SSE, OCR, idioma e temas
-    │
-    └── img/
-        ├── logo.png            # Logótipo da aplicação
-        ├── pt.svg             # Ícone do modo claro (opcional)
-        └── en.svg            # Ícone do modo escuro (opcional)
-
 ## Instalação
 
 ```bash
