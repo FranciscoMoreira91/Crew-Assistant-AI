@@ -27,6 +27,12 @@ Fluxo (sequencial, com passagem de contexto entre tarefas):
 import os
 from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
+from logger import CrewLogger
+from datetime import datetime
+import time
+
+from contextlib import redirect_stdout
+from pathlib import Path
 
 load_dotenv()
 
@@ -188,12 +194,16 @@ def build_tasks(user_message: str, history_text: str, language="pt"):
     return [tarefa_coordenacao, tarefa_pesquisa, tarefa_especialista, tarefa_redacao]
 
 
-def run_crew(user_message: str, history_text: str = "", language="pt", task_callback=None):
+def run_crew(user_message: str, history_text: str = "", language="pt", logger=None, task_callback=None):
     """
     Executa a crew de forma síncrona e devolve a resposta final (string).
     `task_callback`, se fornecido, é chamado pelo CrewAI após cada tarefa
     concluída, permitindo emitir progresso em tempo real (ex: via SSE).
     """
+
+    if logger is None:
+        logger = CrewLogger()
+    
     tasks = build_tasks(
         user_message=user_message,
         history_text=history_text,
@@ -208,5 +218,13 @@ def run_crew(user_message: str, history_text: str = "", language="pt", task_call
         task_callback=task_callback,
     )
 
-    resultado = crew.kickoff()
+    try:
+        resultado = crew.kickoff()
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+
+        raise
+
     return str(resultado)
