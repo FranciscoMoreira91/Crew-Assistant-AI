@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Crew Assistant — Equipa de Agentes IA</title>
+  <title data-i18n="title">Crew Assistant — Equipa de Agentes IA</title>
   <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
@@ -19,7 +19,7 @@
 
     <aside class="sidebar">
 
-      <button id="newChatBtn" class="new-chat-btn">
+      <button data-i18n="new_chat" id="newChatBtn" class="new-chat-btn">
         + Nova Conversa
       </button>
 
@@ -41,7 +41,7 @@
 
             <div>
 
-              <p class="header__eyebrow">
+              <p data-i18n="sub_title" class="header__eyebrow">
                 EQUIPA DE AGENTES
               </p>
 
@@ -55,6 +55,42 @@
             <span id="themeIcon">🌙</span>
           </button>
 
+          <div class="language-selector">
+
+            <button id="languageButton">
+
+              <img id="languageFlag" src="/static/img/flags/pt.svg">
+
+              <span id="languageCode">
+
+                PT
+
+              </span>
+
+            </button>
+
+            <div id="languageMenu" class="language-menu">
+
+              <div class="language-item" data-lang="pt">
+
+                <img src="/static/img/flags/pt.svg">
+
+                Português
+
+              </div>
+
+              <div class="language-item" data-lang="en">
+
+                <img src="/static/img/flags/en.svg">
+
+                English
+
+              </div>
+
+            </div>
+
+          </div>
+
         </div>
 
         <div class="relay" id="relay">
@@ -63,28 +99,28 @@
 
           <div class="relay__node" data-node="coordenador">
             <div class="relay__dot"></div>
-            <span class="relay__label">Coordenador</span>
+            <span class="relay__label" data-i18n="coordinator">Coordenador</span>
           </div>
           <div class="relay__node" data-node="pesquisador">
             <div class="relay__dot"></div>
-            <span class="relay__label">Pesquisador</span>
+            <span class="relay__label" data-i18n="researcher">Pesquisador</span>
           </div>
           <div class="relay__node" data-node="especialista">
             <div class="relay__dot"></div>
-            <span class="relay__label">Especialista</span>
+            <span class="relay__label" data-i18n="expert">Especialista</span>
           </div>
           <div class="relay__node" data-node="redator">
             <div class="relay__dot"></div>
-            <span class="relay__label">Redator</span>
+            <span class="relay__label" data-i18n="copywriter">Redator</span>
           </div>
         </div>
       </header>
 
       <main class="chat" id="chat">
         <div class="chat__empty" id="chatEmpty">
-          <p class="chat__empty-eyebrow">EM ESPERA</p>
-          <p class="chat__empty-title">Envia uma mensagem para acionar a equipa</p>
-          <p class="chat__empty-sub">Coordenador → Pesquisador → Especialista → Redator</p>
+          <p class="chat__empty-eyebrow" data-i18n="onhold">EM ESPERA</p>
+          <p class="chat__empty-title" data-i18n="empty-title">Envia uma mensagem para acionar a equipa</p>
+          <p class="chat__empty-sub" data-i18n="empty-sub">Coordenador → Pesquisador → Especialista → Redator</p>
         </div>
       </main>
 
@@ -100,9 +136,9 @@
         </button>
         <input type="file" id="fileInput" accept="image/*" multiple hidden />
         <input type="text" id="messageInput" class="composer__input"
-          placeholder="Escreve a tua mensagem ou anexa imagens..." autocomplete="off" />
+          data-i18n-placeholder="placeholder" autocomplete="off" />
         <button type="submit" class="composer__send" id="sendBtn">
-          <span>Enviar</span>
+          <span data-i18n="send">Enviar</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M4 12H20M20 12L14 6M20 12L14 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"
               stroke-linejoin="round" />

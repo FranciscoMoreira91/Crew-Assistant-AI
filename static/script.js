@@ -1,3 +1,7 @@
+const languageButton = document.getElementById("languageButton");
+const languageMenu = document.getElementById("languageMenu");
+const languageFlag = document.getElementById("languageFlag");
+const languageCode = document.getElementById("languageCode");
 const newChatBtn = document.getElementById("newChatBtn");
 const historyEl = document.getElementById("chatHistory");
 const themeToggle = document.getElementById("themeToggle");
@@ -28,6 +32,89 @@ let conversations =
 let currentConversation = [];
 let sessionId = localStorage.getItem('crew_session_id') || null;
 let pendingAttachments = []; // { name, dataUrl }
+
+let translations = {};
+
+let currentLanguage =
+  localStorage.getItem("language") || "pt";
+
+async function loadLanguage(language) {
+
+  const response =
+    await fetch(`/static/translations/${language}.json`);
+
+  translations =
+    await response.json();
+
+  translatePage();
+
+}
+
+function translatePage() {
+
+  document.querySelectorAll("[data-i18n]")
+
+    .forEach(element => {
+
+      element.textContent =
+        translations[
+        element.dataset.i18n
+        ];
+
+    });
+
+  document.querySelectorAll(
+    "[data-i18n-placeholder]")
+
+    .forEach(element => {
+
+      element.placeholder =
+
+        translations[
+        element.dataset.i18nPlaceholder
+        ];
+
+    });
+
+  languageButton.onclick = () => {
+
+    languageMenu.classList.toggle("show");
+
+  }
+
+  document
+    .querySelectorAll(".language-item")
+
+    .forEach(item => {
+
+      item.onclick = () => {
+
+        const lang = item.dataset.lang;
+
+        currentLanguage = lang;
+
+        localStorage.setItem(
+          "language",
+          lang
+        );
+
+        languageFlag.src =
+          `/static/img/flags/${lang}.svg`;
+
+        languageCode.textContent =
+          lang.toUpperCase();
+
+        loadLanguage(lang);
+
+        languageMenu.classList.remove("show");
+
+      };
+
+    });
+
+
+}
+
 
 function saveHistory() {
 
@@ -422,7 +509,7 @@ async function sendMessage(message, images) {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, images, session_id: sessionId }),
+      body: JSON.stringify({ message, language: currentLanguage,images, session_id: sessionId }),
     });
 
     const reader = response.body.getReader();
@@ -516,3 +603,11 @@ composerEl.addEventListener('submit', (e) => {
   sendMessage(message, images);
   renderHistory();
 });
+
+loadLanguage(currentLanguage);
+
+languageFlag.src=
+`/static/img/flags/${currentLanguage}.svg`;
+
+languageCode.textContent=
+currentLanguage.toUpperCase();
