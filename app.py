@@ -160,6 +160,7 @@ def chat_stream():
     user_message = (data.get("message") or "").strip()
     images_in = data.get("images") or []
     session_id = data.get("session_id") or str(uuid.uuid4())
+    language = data.get("language", "pt")
 
     if not user_message and not images_in:
         return jsonify({"error": "Mensagem vazia."}), 400
@@ -227,7 +228,7 @@ def chat_stream():
 
             # 3) Pedido normal de texto -> crew de agentes
             history_text = get_history_text(session_id) + extra_context
-            resposta = run_crew(user_message, history_text, task_callback=task_callback)
+            resposta = run_crew(user_message, history_text, language=language, task_callback=task_callback)
             save_message(session_id, "assistant", resposta)
             q.put({"type": "final", "reply": resposta, "session_id": session_id})
 

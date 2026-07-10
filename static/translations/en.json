@@ -1,0 +1,22 @@
+{
+    "title":"Crew Assistant — AI Agent Team",
+    "sub_title":"TEAM OF AGENTS",
+    "new_chat":"New Chat",
+    "coordinator":"Coordinator",
+    "researcher":"Researcher",
+    "expert":"Expert",
+    "copywriter":"Copywriter",
+    "placeholder":"Type a message...",
+    "send":"Send",
+    "upload":"Attach file",
+    "delete":"Delete",
+    "rename":"Rename",
+    "thinking":"Thinking...",
+    "today":"Today",
+    "yesterday":"Yesterday",
+    "this_week":"This Week",
+    "older":"Older",
+    "onhold":"ON HOLD",
+    "empty-title":"Send a message to alert the team",
+    "empty-sub":"Coordinator → Researcher → Specialist → Copywriter"
+}

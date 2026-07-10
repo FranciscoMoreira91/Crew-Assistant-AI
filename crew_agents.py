@@ -108,13 +108,23 @@ def build_agents():
     return coordenador, pesquisador, especialista, redator
 
 
-def build_tasks(user_message: str, history_text: str):
+def build_tasks(user_message: str, history_text: str, language="pt"):
     coordenador, pesquisador, especialista, redator = build_agents()
 
+    if language == "pt":
+        language_instruction = (
+            "IMPORTANTE: Todas as respostas e todo o raciocínio devem ser escritos exclusivamente em Português Europeu."
+        )
+    else:
+        language_instruction = (
+            "IMPORTANT: All reasoning and all responses must be written exclusively in English."
+        )
+
     contexto_conversa = (
+        f"{language_instruction}\n\n"
         f"Histórico recente da conversa (pode estar vazio):\n{history_text}\n\n"
         f"Nova mensagem do humano:\n{user_message}"
-    )
+    )   
 
     tarefa_coordenacao = Task(
         description=(
@@ -129,6 +139,7 @@ def build_tasks(user_message: str, history_text: str):
 
     tarefa_pesquisa = Task(
         description=(
+            f"{language_instruction}\n\n"
             "Com base no plano do Coordenador, reúne a informação, factos e "
             "contexto relevantes para o pedido original do humano. "
             "Sê objetivo e organiza a informação por tópicos."
@@ -140,6 +151,7 @@ def build_tasks(user_message: str, history_text: str):
 
     tarefa_especialista = Task(
         description=(
+            f"{language_instruction}\n\n"
             "Usa a informação reunida pelo Pesquisador para construir uma "
             "resposta tecnicamente sólida ao pedido original do humano. "
             "Inclui exemplos práticos quando fizer sentido e sinaliza "
@@ -152,11 +164,21 @@ def build_tasks(user_message: str, history_text: str):
 
     tarefa_redacao = Task(
         description=(
-            f"Mensagem original do humano: {user_message}\n\n"
-            "Pega em todo o trabalho da equipa e escreve a RESPOSTA FINAL "
-            "para o humano: clara, simpática, bem estruturada, no mesmo "
-            "idioma da mensagem original. Não menciones os outros agentes "
-            "nem o processo interno da equipa — fala diretamente com o humano."
+            f"{language_instruction}\n\n"
+            """Pega em todo o trabalho da equipa e escreve a RESPOSTA FINAL
+            para o humano.
+
+            A resposta deve ser:
+            - clara;
+            - bem estruturada;
+            - natural;
+            - escrita exclusivamente no idioma indicado acima.
+
+            Nunca mudes de idioma.
+            Nunca mistures Português e Inglês.
+            Não menciones os outros agentes nem o processo interno da equipa.
+            Fala diretamente com o humano.
+            """
         ),
         expected_output="Resposta final, pronta a mostrar ao humano.",
         agent=redator,
@@ -166,13 +188,17 @@ def build_tasks(user_message: str, history_text: str):
     return [tarefa_coordenacao, tarefa_pesquisa, tarefa_especialista, tarefa_redacao]
 
 
-def run_crew(user_message: str, history_text: str = "", task_callback=None):
+def run_crew(user_message: str, history_text: str = "", language="pt", task_callback=None):
     """
     Executa a crew de forma síncrona e devolve a resposta final (string).
     `task_callback`, se fornecido, é chamado pelo CrewAI após cada tarefa
     concluída, permitindo emitir progresso em tempo real (ex: via SSE).
     """
-    tasks = build_tasks(user_message, history_text)
+    tasks = build_tasks(
+        user_message=user_message,
+        history_text=history_text,
+        language=language
+    )
 
     crew = Crew(
         agents=[t.agent for t in tasks],

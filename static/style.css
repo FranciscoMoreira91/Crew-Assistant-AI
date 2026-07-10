@@ -61,6 +61,103 @@ body {
 
 /* ---------- Header ---------- */
 
+.language-selector {
+
+  position: relative;
+
+}
+
+#languageButton {
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 14px;
+
+  border-radius: 10px;
+
+  cursor: pointer;
+
+  border: 1px solid var(--border);
+
+  background: var(--panel);
+
+  color: var(--text);
+
+  font-weight: 500;
+
+}
+
+#languageButton img {
+
+  width: 20px;
+
+  height: 20px;
+
+  border-radius: 50%;
+
+}
+
+.language-menu {
+
+  position: absolute;
+
+  right: 0;
+
+  top: 55px;
+
+  display: none;
+
+  width: 170px;
+
+  border-radius: 12px;
+
+  background: var(--panel);
+
+  border: 1px solid var(--border);
+
+  color: var(--text);
+
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .15);
+
+}
+
+.language-menu.show {
+
+  display: block;
+
+}
+
+.language-item {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 12px;
+
+  cursor: pointer;
+
+  color: var(--text);
+
+  transition: background .2s;
+}
+
+.language-item:hover {
+
+  background: var(--panel-alt);
+
+}
+
+.language-item img {
+
+  width: 20px;
+
+}
+
 .header__top {
   display: flex;
   justify-content: space-between;

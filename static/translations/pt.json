@@ -1,0 +1,22 @@
+{
+    "title":"Crew Assistant — Equipa de Agentes IA",
+    "sub_title":"EQUIPA DE AGENTES",
+    "new_chat":"Nova Conversa",
+    "coordinator":"Coordenador",
+    "researcher":"Pesquisador",
+    "expert":"Especialista",
+    "copywriter":"Redator",
+    "placeholder":"Escreva uma mensagem ou anexa imagens...",
+    "send":"Enviar",
+    "upload":"Anexar ficheiro",
+    "delete":"Eliminar",
+    "rename":"Renomear",
+    "thinking":"A pensar...",
+    "today":"Hoje",
+    "yesterday":"Ontem",
+    "this_week":"Esta semana",
+    "older":"Mais antigos",
+    "onhold":"EM ESPERA",
+    "empty-title":"Envia uma mensagem para acionar a equipa",
+    "empty-sub":"Coordenador → Pesquisador → Especialista → Redator"
+}
