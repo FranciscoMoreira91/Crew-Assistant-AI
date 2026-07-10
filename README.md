@@ -36,21 +36,33 @@ toda a equipa.
 
 ## Estrutura do projeto
 
-```
 crew_chatbot/
-├── app.py               # Servidor Flask (API, streaming SSE, rotas de texto/imagem/anexos)
-├── crew_agents.py        # Definição dos agentes, tarefas e da crew (texto)
-├── image_tool.py         # Geração de imagens via AUTOMATIC1111 local
-├── ocr_tool.py            # OCR de anexos + junção num PDF pesquisável
+├── app.py                      # Servidor Flask (API REST + Streaming SSE)
+├── crew_agents.py              # Definição dos agentes, tarefas e CrewAI
+├── image_tool.py               # Geração de imagens (AUTOMATIC1111)
+├── ocr_tool.py                 # OCR + criação de PDFs pesquisáveis
+├── logger.py                   # Sistema de logs estruturados da Crew
 ├── requirements.txt
-├── .env.example           # Copiar para .env e preencher a chave da API
-├── PDF/                    # PDFs gerados a partir de imagens anexadas no chat
+├── .env.example                # Configuração das APIs e modelos
+├── README.md
+│
+├── logs/                       # Logs gerados por cada pedido efetuado
+│   └── 20260710_183521.log
+│
+├── PDF/                        # PDFs gerados a partir das imagens anexadas
+│   └── anexos_20260710_183522.pdf
+│
 ├── templates/
-│   └── index.html         # Página do chat
+│   └── index.html              # Interface principal do chatbot
+│
 └── static/
-    ├── style.css           # Design (tema navy/indigo + relay animado)
-    └── script.js           # Lógica do chat (fetch + streaming + anexos)
-```
+    ├── style.css               # Estilos da aplicação (Light/Dark Mode)
+    ├── script.js               # Lógica do chat, SSE, OCR, idioma e temas
+    │
+    └── img/
+        ├── logo.png            # Logótipo da aplicação
+        ├── pt.svg             # Ícone do modo claro (opcional)
+        └── en.svg            # Ícone do modo escuro (opcional)
 
 ## Instalação
 
@@ -77,6 +89,63 @@ python app.py
 ```
 
 Depois abre o browser em: **http://localhost:5000**
+
+## Outras Funcionalidades
+
+🌍 Internacionalização (PT/EN)
+
+Foi implementado um sistema completo de internacionalização (i18n), permitindo alterar dinamicamente o idioma da interface e das respostas dos agentes.
+
+- Funcionalidades
+- Seleção de idioma através de um menu suspenso.
+- Suporte para:
+  - 🇵🇹 Português
+  - 🇬🇧 English
+- Alteração imediata dos textos da interface sem recarregar a página.
+- Tradução dos textos estáticos da aplicação.
+- O idioma escolhido é enviado para o backend, garantindo que toda a equipa de agentes responde exclusivamente no idioma selecionado.
+
+## 🇵🇹🇬🇧 Seletor de idioma com bandeiras
+
+- O seletor de idioma foi melhorado para incluir bandeiras, tornando a escolha mais intuitiva.
+
+- Inclui:
+
+- Bandeira do idioma atualmente selecionado.
+- Alteração automática da bandeira quando o idioma muda.
+- Ícones SVG leves e adaptados ao design da aplicação.
+🌙 Tema Claro / Escuro
+
+💬 Nova Conversa
+
+- Foi criado um botão Nova Conversa para iniciar rapidamente uma nova sessão.
+
+- Ao iniciar uma nova conversa:
+
+- é criado um novo identificador de sessão;
+- o histórico atual deixa de ser utilizado;
+- a área do chat é limpa;
+- os agentes começam uma conversa completamente nova.
+
+📜 Histórico de Conversas
+
+- O projeto foi preparado para apresentar o histórico das conversas anteriores.
+
+- Cada conversa pode ser apresentada numa lista lateral, permitindo ao utilizador alternar facilmente entre diferentes sessões.
+
+📄 Sistema de Logs
+
+- Foi iniciado um sistema de registo da execução dos agentes.
+
+- Os logs incluem informação como:
+
+    - data;
+    - hora;
+    - pergunta do utilizador;
+    - execução dos agentes;
+    - resposta final.
+
+Este sistema facilita a depuração, auditoria e análise do comportamento da Crew.
 
 ## Notas importantes
 

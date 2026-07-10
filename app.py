@@ -19,6 +19,9 @@ import queue
 import threading
 import uuid
 
+from logger import CrewLogger
+from datetime import datetime
+
 from flask import Flask, request, jsonify, render_template, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 
@@ -145,6 +148,9 @@ def chat():
             return jsonify({"error": f"Não consegui gerar a imagem: {exc}"}), 502
 
     history_text = get_history_text(session_id) + extra_context
+
+    logger = CrewLogger()
+
     resposta = run_crew(user_message, history_text)
     save_message(session_id, "assistant", resposta)
 
@@ -172,8 +178,12 @@ def chat_stream():
 
     q: "queue.Queue" = queue.Queue()
 
+    logger = CrewLogger(session_id)
+
     def task_callback(task_output):
         agent_role = getattr(task_output, "agent", "Agente")
+        output = getattr(task_output, "raw", "")
+        logger.agent(agent_role, output)
         label = AGENT_LABELS.get(agent_role, f"{agent_role} a trabalhar...")
         q.put({"type": "progress", "agent": agent_role, "label": label})
 
@@ -228,9 +238,15 @@ def chat_stream():
 
             # 3) Pedido normal de texto -> crew de agentes
             history_text = get_history_text(session_id) + extra_context
-            resposta = run_crew(user_message, history_text, language=language, task_callback=task_callback)
+
+            logger.user(user_message)
+
+            resposta = run_crew(user_message, history_text, language=language, logger=logger, task_callback=task_callback)
             save_message(session_id, "assistant", resposta)
             q.put({"type": "final", "reply": resposta, "session_id": session_id})
+
+            logger.response(resposta)
+            logger.finish()
 
         except Exception as exc:  # noqa: BLE001
             q.put({"type": "error", "message": str(exc)})
