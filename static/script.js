@@ -7,7 +7,7 @@ const historyEl = document.getElementById("chatHistory");
 const themeToggle = document.getElementById("themeToggle");
 const themeIcon = document.getElementById("themeIcon");
 const chatEl = document.getElementById('chat');
-const chatEmptyEl = document.getElementById('chatEmpty');
+const chatMessagesEl = document.getElementById('chatMessages');
 const composerEl = document.getElementById('composer');
 const inputEl = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -204,22 +204,31 @@ function deleteConversation(index) {
 
 }
 
+function removeEmptyState() {
+  const empty = document.getElementById('chatEmpty');
+  if (empty) empty.remove();
+}
+
 function clearConversation() {
 
-  chatEl.replaceChildren();
+  chatMessagesEl.innerHTML = '';
 
-  const empty = document.createElement("div");
+  if (!document.getElementById('chatEmpty')) {
 
-  empty.className = "chat__empty";
-  empty.id = "chatEmpty";
+    const empty = document.createElement('div');
 
-  empty.innerHTML = `
+    empty.className = 'chat__empty';
+    empty.id = 'chatEmpty';
+
+    empty.innerHTML = `
         <p class="chat__empty-eyebrow">EQUIPA DE AGENTES</p>
         <h2 class="chat__empty-title">Como posso ajudar?</h2>
         <p class="chat__empty-sub">Escreve uma mensagem para começar.</p>
     `;
 
-  chatEl.appendChild(empty);
+    chatEl.insertBefore(empty, chatMessagesEl);
+
+  }
 
 }
 
@@ -305,17 +314,17 @@ function scrollToBottom() {
 }
 
 function addMessage(text, role) {
-  if (chatEmptyEl) chatEmptyEl.remove();
+  removeEmptyState();
   const div = document.createElement('div');
   div.className = `msg msg--${role}`;
   div.textContent = text;
-  chatEl.appendChild(div);
+  chatMessagesEl.appendChild(div);
   scrollToBottom();
   return div;
 }
 
 function addUserMessageWithAttachments(text, images) {
-  if (chatEmptyEl) chatEmptyEl.remove();
+  removeEmptyState();
   const div = document.createElement('div');
   div.className = 'msg msg--user';
 
@@ -337,13 +346,13 @@ function addUserMessageWithAttachments(text, images) {
     div.appendChild(p);
   }
 
-  chatEl.appendChild(div);
+  chatMessagesEl.appendChild(div);
   scrollToBottom();
   return div;
 }
 
 function addImageMessage(imageBase64, promptUsed) {
-  if (chatEmptyEl) chatEmptyEl.remove();
+  removeEmptyState();
   const wrapper = document.createElement('div');
   wrapper.className = 'msg msg--assistant msg--image';
 
@@ -358,13 +367,13 @@ function addImageMessage(imageBase64, promptUsed) {
 
   wrapper.appendChild(img);
   wrapper.appendChild(caption);
-  chatEl.appendChild(wrapper);
+  chatMessagesEl.appendChild(wrapper);
   scrollToBottom();
   return wrapper;
 }
 
 function addPdfMessage(pdfFilename, downloadUrl, pages) {
-  if (chatEmptyEl) chatEmptyEl.remove();
+  removeEmptyState();
   const div = document.createElement('div');
   div.className = 'msg msg--assistant msg--pdf';
 
@@ -381,17 +390,17 @@ function addPdfMessage(pdfFilename, downloadUrl, pages) {
 
   div.appendChild(p);
   div.appendChild(link);
-  chatEl.appendChild(div);
+  chatMessagesEl.appendChild(div);
   scrollToBottom();
   return div;
 }
 
 function addProgressMessage(text) {
-  if (chatEmptyEl) chatEmptyEl.remove();
+  removeEmptyState();
   const div = document.createElement('div');
   div.className = 'msg msg--progress';
   div.textContent = text;
-  chatEl.appendChild(div);
+  chatMessagesEl.appendChild(div);
   scrollToBottom();
   return div;
 }
