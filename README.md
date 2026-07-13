@@ -11,26 +11,72 @@ trabalhar em tempo real).
 
 ## Como funciona a equipa de agentes
 
+O CrewAI monta um pipeline diferente consoante o tipo de pedido:
+
+**Pedido normal (texto)**
+
 ```
 Utilizador
      │
      ▼
 🧭 Coordenador
      │
-     ├──────────────┐
-     ▼              ▼
-🔎 Pesquisador   📧 Assistente de Email
-     │              │
-     ▼              │
-🛠️ Especialista     │
-     │              │
-     └──────┬───────┘
-            ▼
+     ▼
+🔎 Pesquisador
+     │
+     ▼
+🛠️ Especialista
+     │
+     ▼
 ✍️ Redator Final
-            │
-            ▼
+     │
+     ▼
 Resposta apresentada no chat
 ```
+
+**Pedido de email** (detetado por palavras-chave em `app.py`, ex: "email",
+"fatura", "gmail", "outlook", "anexo", "recibo")
+
+```
+Utilizador
+     │
+     ▼
+📧 Assistente de Email  (chama sempre a EmailTool — nunca inventa dados)
+     │
+     ▼
+✍️ Redator Final  (reformula fielmente o resultado real da EmailTool)
+     │
+     ▼
+Resposta apresentada no chat
+```
+
+> O Coordenador/Pesquisador/Especialista ficam de fora deste pipeline. Como
+> não têm acesso à caixa de correio real, ao "planearem" a resposta
+> acabavam por gerar exemplos ilustrativos com números e nomes de ficheiros
+> inventados — que a versão final apresentava como se fossem reais. O
+> pipeline de email é por isso direto: só o agente com a ferramenta e o
+> redator que reformula o texto, sem inventar nada.
+
+**Pedido de imagem** (detetado por palavras-chave em `app.py`, ex:
+"desenha", "gera uma imagem", "imagem de")
+
+```
+Utilizador
+     │
+     ▼
+app.py chama a ImageTool DIRETAMENTE (sem passar pelo CrewAI/LLM)
+     │
+     ▼
+Imagem gerada, guardada em imagens/ e devolvida ao chat
+```
+
+> A geração de imagem não passa por nenhum agente CrewAI. Uma imagem em
+> base64 tem tipicamente dezenas ou centenas de milhares de caracteres —
+> comprido demais para um LLM conseguir "reproduzir" fielmente na resposta
+> final de uma Task sem a truncar ou corromper. Por isso o `app.py` chama a
+> `ImageTool` diretamente; o LLM só é usado *dentro* da ferramenta, para
+> melhorar o prompt de texto antes de gerar a imagem (isso sim, cabe bem
+> numa resposta de LLM).
 
 Cada agente recebe o output dos anteriores como contexto (`context=[...]`
 nas `Task` do CrewAI), pelo que o resultado final já incorpora o trabalho de
@@ -46,13 +92,39 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edita o `.env` e escolhe **um** dos provedores:
+Edita o `.env` e escolhe **um** dos provedores de LLM:
 
 - **OpenAI**: define `OPENAI_API_KEY` e `MODEL_NAME=gpt-4o-mini` (ou outro modelo)
 - **Anthropic (Claude)**: define `ANTHROPIC_API_KEY` e `MODEL_NAME=claude-sonnet-4-6`
+- **Ollama (local)**: define `MODEL_NAME=ollama/qwen2.5` (ou outro modelo Ollama
+  com bom suporte de *function calling* — ver nota abaixo)
 
 O CrewAI usa o `litellm` por baixo, por isso basta indicar o nome do modelo
 correto e a respetiva chave de API — não é preciso alterar código.
+
+> **Nota sobre modelos locais (Ollama) e *function calling*:** os agentes
+> de Email e de Coordenação dependem de o LLM conseguir chamar ferramentas
+> corretamente. Modelos como `mistral` puro têm suporte inconsistente disto
+> no Ollama e podem "inventar" texto a fingir que usaram uma ferramenta em
+> vez de a chamarem de verdade. `qwen2.5` e `llama3.1` costumam ser bem mais
+> fiáveis neste aspeto.
+
+Para a funcionalidade de **email** (ver secção própria abaixo), define
+também:
+```
+EMAIL_HOST=imap.gmail.com
+EMAIL_PORT=993
+EMAIL_USERNAME=oteuemail@gmail.com
+EMAIL_PASSWORD=<password de aplicação — nunca a password normal de login>
+EMAIL_FOLDER=INBOX
+```
+
+Para a funcionalidade de **geração de imagens** (ver secção própria
+abaixo), define também:
+```
+HF_TOKEN=<o teu token da Hugging Face>
+IMAGE_MODEL=black-forest-labs/FLUX.1-schnell
+```
 
 ## Executar
 
@@ -129,6 +201,17 @@ Este sistema facilita a depuração, auditoria e análise do comportamento da Cr
   da página (o "relay").
 - Existe também um endpoint simples `/api/chat` (sem streaming) caso
   prefiras integrar noutro frontend sem lidar com SSE.
+- Pastas geradas automaticamente na raiz do projeto (criadas sozinhas na
+  primeira execução, não precisas de as criar à mão):
+  - `PDF/` — PDFs pesquisáveis criados a partir de anexos de imagem (OCR) e
+    faturas descarregadas por email.
+  - `imagens/` — imagens geradas pela `ImageTool`.
+  - `logs/` — um ficheiro de log por conversa, com o detalhe de cada agente.
+- **Segurança:** o `.env` contém credenciais reais (password de email,
+  token da Hugging Face, chaves de API). Nunca o commits para o git —
+  confirma que está no `.gitignore`. Se alguma password ou token ficar
+  exposto por engano (ex: partilhado num chat, print, ou commit), troca-o
+  imediatamente.
 - Podes adicionar ferramentas reais aos agentes (pesquisa na web, leitura de
   ficheiros, etc.) usando `crewai-tools`, por exemplo:
 
@@ -170,30 +253,109 @@ software à parte):
 Os ficheiros relevantes são `ocr_tool.py` (OCR + criação do PDF) e as
 mesmas rotas de `app.py` usadas para o chat.
 
-## Geração de imagens (opcional)
+## Ler emails (Gmail / Outlook)
 
-Se o pedido do humano parecer um pedido de imagem (ex: "desenha um cavalo",
-"gera uma imagem de..."), o backend deteta isso automaticamente e, em vez de
-acionar a crew de agentes de texto, faz o seguinte:
+No chat, pedidos que mencionem palavras como "email", "fatura", "gmail",
+"outlook", "anexo" ou "recibo" ativam o **Assistente de Email**, que usa a
+`EmailTool` (`tools/email_tool.py`) para ligar à caixa de correio por IMAP.
 
-1. Usa o LLM já configurado (ex: `ollama/gnokit/improve-prompt`) para
-   transformar o pedido num bom prompt de Stable Diffusion, em inglês.
-2. Envia esse prompt para o **AUTOMATIC1111** local (`SD_API_URL` no `.env`,
-   por omissão `http://127.0.0.1:7860`).
-3. Devolve a imagem gerada ao chat.
+Exemplos de pedidos que funcionam:
+- "verifica no meu email todos os emails não lidos com o assunto Fatura, diz quantos foram"
+- "lê os emails da caixa de entrada que contenham faturas, se tiverem alguma fatura em anexo junta num documento PDF"
 
-**Pré-requisito:** o AUTOMATIC1111 (stable-diffusion-webui) tem de estar a
-correr localmente com a flag `--api` ativa:
+O que a `EmailTool` faz:
+1. Liga por IMAP com as credenciais do `.env`.
+2. Procura emails por palavra-chave no assunto (`subject_keyword`, por
+   omissão `"Fatura"`), com opção de filtrar só os não lidos
+   (`unread_only`).
+3. Devolve a contagem real e uma lista com remetente/assunto/data/se tem
+   anexo.
+4. Se pedido, descarrega os anexos de todos os emails encontrados e
+   junta-os **num único PDF**, guardado em `PDF/faturas_email_AAAAMMDD_HHMMSS.pdf`
+   (PDFs são fundidos diretamente; imagens são convertidas em página PDF).
 
+**Importante — a EmailTool nunca inventa dados.** Se a ligação falhar, é
+devolvido o erro real, nunca um resultado fictício. Por desenho, o pipeline
+de email (ver diagrama acima) é curto (só o Assistente de Email + Redator)
+precisamente para nenhum outro agente "imaginar" exemplos que pudessem ser
+confundidos com dados reais.
+
+### Gmail (suportado)
+
+Com verificação em 2 passos ativa (recomendado), o Gmail **não aceita** a
+password normal de login para IMAP — é preciso gerar uma **password de
+aplicação**:
+
+1. Vai a https://myaccount.google.com/apppasswords
+2. Cria uma password de aplicação (16 caracteres)
+3. No `.env`:
+   ```
+   EMAIL_HOST=imap.gmail.com
+   EMAIL_PORT=993
+   EMAIL_USERNAME=oteuemail@gmail.com
+   EMAIL_PASSWORD=<password de aplicação, sem espaços>
+   ```
+4. Confirma que o IMAP está ativo em Gmail → Definições → **Ver todas as
+   definições** → separador **"Encaminhamento e POP/IMAP"** (em muitas
+   contas o IMAP já vem ativado por omissão e essa opção nem aparece — é
+   normal).
+
+Testa a ligação isoladamente, sem passar pelo chatbot:
+```bash
+python -u test_email_tool.py
 ```
-set COMMANDLINE_ARGS=--api --xformers --medvram
-```
 
-Sem isto a correr, os pedidos de texto continuam a funcionar normalmente —
-só os pedidos de imagem vão falhar com uma mensagem de erro no chat.
+### Outlook / Hotmail (contas pessoais) — ⚠️ requer OAuth2
 
-Os ficheiros relevantes são `image_tool.py` (comunicação com a API do
-AUTOMATIC1111 e refinamento do prompt) e as rotas em `app.py`.
+Desde ~outubro de 2024, a Microsoft **bloqueia por completo** o login IMAP
+com password (mesmo password de aplicação) em contas pessoais
+Outlook.com/Hotmail — só aceita OAuth2. Não há password nenhuma que resolva
+isto com login simples.
+
+> **Estado atual:** existe um módulo `outlook_auth.py` já preparado com o
+> essencial do fluxo OAuth2 via MSAL (Device Code Flow), mas a integração
+> com a `EmailTool` (autenticação IMAP via `XOAUTH2`) ainda **não está
+> ligada** — é trabalho pendente. Para já, usa Gmail. Se precisares mesmo
+> de Outlook, os passos em falta são:
+> 1. Registar uma app no [Azure Portal](https://portal.azure.com) (App
+>    registrations), tipo de conta "Personal Microsoft accounts only",
+>    com "Allow public client flows" ativado.
+> 2. Adicionar a permissão delegada `IMAP.AccessAsUser.All` (API "Office
+>    365 Exchange Online").
+> 3. Copiar o "Application (client) ID" para `MS_CLIENT_ID` no `.env`.
+> 4. Instalar `msal` (`pip install msal`) e criar um script
+>    `outlook_auth_setup.py` que corre uma vez para autenticar
+>    interativamente (Device Code Flow) e guardar o token em cache.
+> 5. Alterar `EmailTool._connect()` para, quando `EMAIL_PROVIDER=outlook`,
+>    obter o `access_token` via `outlook_auth.get_access_token()` e fazer
+>    `mail.authenticate("XOAUTH2", ...)` em vez de `mail.login(...)`.
+
+## Geração de imagens
+
+No chat, pedidos com palavras como "desenha", "gera uma imagem", "cria uma
+imagem" ou "imagem de" ativam a geração de imagens.
+
+**Importante: a geração de imagem não passa pelo CrewAI/LLM como resposta
+final.** Uma imagem em base64 tem tipicamente dezenas ou centenas de
+milhares de caracteres — longa demais para um LLM (sobretudo modelos locais)
+conseguir reproduzir sem truncar ou corromper, o que resultava em imagens
+partidas. Por isso o `app.py` chama a `ImageTool` (`image_tool.py`)
+**diretamente**:
+
+1. O LLM configurado (`MODEL_NAME`) é usado só para refinar o pedido do
+   humano num prompt de Stable Diffusion detalhado (função
+   `_refine_prompt`) — isto sim, cabe perfeitamente numa resposta de texto.
+2. Esse prompt é enviado à API de inferência da Hugging Face (modelo
+   `IMAGE_MODEL`, por omissão `black-forest-labs/FLUX.1-schnell`).
+3. A imagem é guardada em `imagens/imagem_AAAAMMDD_HHMMSS.png` na raiz do
+   projeto (a pasta é criada automaticamente se não existir) e devolvida ao
+   chat em base64, com um link de download (`/imagens/<filename>`).
+
+**Pré-requisito:** um token da Hugging Face em `HF_TOKEN` no `.env`
+(gera um em https://huggingface.co/settings/tokens).
+
+Os ficheiros relevantes são `image_tool.py` (refinamento do prompt +
+chamada à API da Hugging Face + gravação em disco) e as rotas em `app.py`.
 
 ## Personalizar
 
@@ -202,3 +364,6 @@ AUTOMATIC1111 e refinamento do prompt) e as rotas em `app.py`.
 - **Fluxo**: podes mudar `Process.sequential` para `Process.hierarchical`
   em `crew_agents.py` se quiseres um agente "gestor" a delegar dinamicamente
   em vez de um pipeline fixo.
+- **Deteção de email/imagem**: as palavras-chave usadas para decidir se um
+  pedido é sobre email (`EMAIL_KEYWORDS`) ou imagem (`IMAGE_KEYWORDS`) estão
+  no topo do `app.py`.
