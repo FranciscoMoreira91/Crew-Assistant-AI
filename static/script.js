@@ -313,12 +313,46 @@ function scrollToBottom() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
+const AVATAR_ICONS = {
+  user: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="8" r="4" fill="currentColor"/>
+    <path d="M4 20c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+  assistant: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <rect x="4" y="8" width="16" height="12" rx="4" fill="currentColor"/>
+    <rect x="10" y="2" width="4" height="4" rx="1.5" fill="currentColor"/>
+    <line x1="12" y1="6" x2="12" y2="8" stroke="currentColor" stroke-width="2"/>
+    <circle cx="9" cy="14.5" r="1.6" fill="var(--bg)"/>
+    <circle cx="15" cy="14.5" r="1.6" fill="var(--bg)"/>
+  </svg>`,
+};
+
+function createAvatar(role) {
+  const avatar = document.createElement('div');
+  avatar.className = `avatar avatar--${role}`;
+  avatar.innerHTML = AVATAR_ICONS[role] || AVATAR_ICONS.assistant;
+  return avatar;
+}
+
+/**
+ * Envolve o elemento da mensagem (bolha) numa "row" com o avatar ao lado.
+ * `role` é 'user' ou 'assistant'. `extraClass` (opcional) permite limitar
+ * a largura da row em casos especiais (ex: mensagens de imagem).
+ */
+function wrapWithAvatar(msgEl, role, extraClass) {
+  const row = document.createElement('div');
+  row.className = `msg-row msg-row--${role}${extraClass ? ' ' + extraClass : ''}`;
+  row.appendChild(createAvatar(role));
+  row.appendChild(msgEl);
+  return row;
+}
+
 function addMessage(text, role) {
   removeEmptyState();
   const div = document.createElement('div');
   div.className = `msg msg--${role}`;
   div.textContent = text;
-  chatMessagesEl.appendChild(div);
+  chatMessagesEl.appendChild(wrapWithAvatar(div, role));
   scrollToBottom();
   return div;
 }
@@ -346,11 +380,10 @@ function addUserMessageWithAttachments(text, images) {
     div.appendChild(p);
   }
 
-  chatMessagesEl.appendChild(div);
+  chatMessagesEl.appendChild(wrapWithAvatar(div, 'user'));
   scrollToBottom();
   return div;
 }
-
 function addImageMessage(imageBase64, promptUsed) {
   removeEmptyState();
   const wrapper = document.createElement('div');
@@ -367,7 +400,7 @@ function addImageMessage(imageBase64, promptUsed) {
 
   wrapper.appendChild(img);
   wrapper.appendChild(caption);
-  chatMessagesEl.appendChild(wrapper);
+  chatMessagesEl.appendChild(wrapWithAvatar(wrapper, 'assistant', 'msg-row--image'));
   scrollToBottom();
   return wrapper;
 }
@@ -390,7 +423,7 @@ function addPdfMessage(pdfFilename, downloadUrl, pages) {
 
   div.appendChild(p);
   div.appendChild(link);
-  chatMessagesEl.appendChild(div);
+  chatMessagesEl.appendChild(wrapWithAvatar(div, 'assistant'));
   scrollToBottom();
   return div;
 }
