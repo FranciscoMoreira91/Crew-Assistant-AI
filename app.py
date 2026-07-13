@@ -26,8 +26,10 @@ from flask import Flask, request, jsonify, render_template, Response, stream_wit
 from flask_cors import CORS
 
 from crew_agents import run_crew
-from image_tool import generate_image, refine_image_prompt
 from ocr_tool import images_to_searchable_pdf, PDF_DIR
+from image_tool import ImageTool, IMAGENS_DIR
+
+image_tool = ImageTool()
 
 app = Flask(__name__)
 CORS(app)
@@ -42,9 +44,14 @@ AGENT_LABELS = {
     "Especialista Técnico": "🛠️ Especialista a preparar o conteúdo técnico...",
     "Redator Final": "✍️ Redator a escrever a resposta final...",
     "Assistente de Email": "📧 A verificar o email...",
+    "Especialista em Geração de Imagens por Inteligência Artificial": "🎨 A gerar a imagem...",
 }
 
-# Palavras-chave simples para decidir se o pedido é de geração de imagem.
+EMAIL_KEYWORDS = (
+    "email", "emails", "gmail", "outlook",
+    "fatura", "invoice", "anexo", "recibo",
+)
+
 IMAGE_KEYWORDS = (
     "gera uma imagem", "gerar uma imagem", "gerar imagem", "cria uma imagem",
     "criar uma imagem", "desenha", "desenhar", "ilustra", "ilustração",
@@ -52,17 +59,8 @@ IMAGE_KEYWORDS = (
     "draw", "generate an image", "create an image", "picture of", "sketch",
 )
 
-EMAIL_KEYWORDS = (
-    "email", "emails", "gmail", "outlook",
-    "fatura", "invoice", "anexo", "recibo",
-)
-
 MAX_OCR_CONTEXT_CHARS = 4000
 
-
-def is_image_request(message: str) -> bool:
-    m = message.lower()
-    return any(keyword in m for keyword in IMAGE_KEYWORDS)
 
 def is_email_request(message):
 
@@ -72,6 +70,11 @@ def is_email_request(message):
         k in message
         for k in EMAIL_KEYWORDS
     )
+
+
+def is_image_request(message: str) -> bool:
+    m = message.lower()
+    return any(keyword in m for keyword in IMAGE_KEYWORDS)
 
 
 def get_history_text(session_id: str) -> str:
@@ -103,6 +106,11 @@ def index():
 @app.route("/pdf-files/<path:filename>")
 def download_pdf(filename):
     return send_from_directory(PDF_DIR, filename, as_attachment=True)
+
+
+@app.route("/imagens/<path:filename>")
+def download_imagem(filename):
+    return send_from_directory(IMAGENS_DIR, filename, as_attachment=False)
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -148,23 +156,26 @@ def chat():
                 "reply": f"PDF criado com {attachment_info['pages']} página(s).",
             })
 
-    if is_image_request(user_message):
-        try:
-            prompt_final = refine_image_prompt(user_message)
-            image_b64 = generate_image(prompt_final)
-            save_message(session_id, "assistant", f"[Imagem gerada] {prompt_final}")
-            return jsonify({
-                "session_id": session_id,
-                "type": "image",
-                "image_base64": image_b64,
-                "prompt_used": prompt_final,
-            })
-        except Exception as exc:  # noqa: BLE001
-            return jsonify({"error": f"Não consegui gerar a imagem: {exc}"}), 502
-
     history_text = get_history_text(session_id) + extra_context
 
     logger = CrewLogger()
+
+    if is_image_request(user_message):
+        try:
+            resultado_imagem = image_tool._run(prompt=user_message)
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": f"Não consegui gerar a imagem: {exc}"}), 502
+
+        save_message(session_id, "assistant", "[Imagem gerada]")
+        payload = {
+            "session_id": session_id,
+            "type": "image",
+            "image_base64": resultado_imagem["base64"],
+            "download_url": f"/imagens/{resultado_imagem['filename']}",
+        }
+        if attachment_info:
+            payload["attachment"] = attachment_info
+        return jsonify(payload)
 
     resposta = run_crew(
         user_message, history_text, include_email=is_email_request(user_message)
@@ -236,24 +247,26 @@ def chat_stream():
                     })
                     return
 
-            # 2) Pedido de geração de imagem
+            # 3) Pedido de imagem -> ImageTool chamada diretamente (nunca
+            #    através do CrewAI/LLM, para não corromper o base64)
             if is_image_request(user_message):
-                q.put({"type": "image_progress", "label": "🎨 A melhorar o teu pedido para a imagem..."})
-                prompt_final = refine_image_prompt(user_message)
+                q.put({"type": "image_progress", "label": "🎨 A gerar a imagem (pode demorar um pouco)..."})
+                try:
+                    resultado_imagem = image_tool._run(prompt=user_message)
+                except Exception as exc:  # noqa: BLE001
+                    q.put({"type": "error", "message": f"Não consegui gerar a imagem: {exc}"})
+                    return
 
-                q.put({"type": "image_progress", "label": "🖼️ A gerar a imagem (pode demorar um pouco)..."})
-                image_b64 = generate_image(prompt_final)
-
-                save_message(session_id, "assistant", f"[Imagem gerada] {prompt_final}")
+                save_message(session_id, "assistant", "[Imagem gerada]")
                 q.put({
                     "type": "image",
-                    "image_base64": image_b64,
-                    "prompt_used": prompt_final,
+                    "image_base64": resultado_imagem["base64"],
+                    "download_url": f"/imagens/{resultado_imagem['filename']}",
                     "session_id": session_id,
                 })
                 return
 
-            # 3) Pedido normal de texto -> crew de agentes
+            # 4) Pedido normal de texto -> crew de agentes
             history_text = get_history_text(session_id) + extra_context
 
             logger.user(user_message)

@@ -1,89 +1,175 @@
-"""
-image_tool.py
---------------
-Comunicação com a API local do AUTOMATIC1111 (Stable Diffusion WebUI)
-para gerar imagens a partir de texto (txt2img).
-
-Pressupõe que o WebUI foi iniciado com a flag --api, por exemplo:
-    set COMMANDLINE_ARGS=--api --xformers --medvram
-"""
-
 import os
-import requests
+import io
+import base64
 import litellm
+
+from datetime import datetime
+from huggingface_hub import InferenceClient
+from typing import Type
+from pydantic import BaseModel, Field
+from crewai.tools import BaseTool
 
 SD_API_URL = os.getenv("SD_API_URL", "http://127.0.0.1:7860").rstrip("/")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-def refine_image_prompt(user_message: str) -> str:
-    """
-    Usa o LLM já configurado para transformar
-    o pedido do humano num bom prompt de Stable Diffusion, em portugês.
-    Se falhar por qualquer razão, devolve a mensagem original como fallback.
-    """
-    instrucao = (
-        "Rewrite the following request as a single, detailed Stable Diffusion "
-        "image prompt in Portuguese. Only output the prompt itself, nothing else, "
-        "no quotes, no explanations.\n\n"
-        f"Request: {user_message}"
-    )
-    kwargs = {
-        "model": MODEL_NAME,
-        "messages": [{"role": "user", "content": instrucao}],
-    }
-    if MODEL_NAME.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
-        kwargs["api_base"] = os.getenv("OLLAMA_API_BASE")
+IMAGE_MODEL = os.getenv(
+    "IMAGE_MODEL",
+    "black-forest-labs/FLUX.1-schnell"
+)
 
-    try:
-        response = litellm.completion(**kwargs)
-        texto = response.choices[0].message.content.strip()
-        return texto if texto else user_message
-    except Exception:
-        return user_message
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IMAGENS_DIR = os.path.join(BASE_DIR, "imagens")
+os.makedirs(IMAGENS_DIR, exist_ok=True)
 
-DEFAULT_NEGATIVE_PROMPT = (
-    "blurry, low quality, distorted, deformed, extra limbs, watermark, text, "
-    "bad anatomy, worst quality"
+client = InferenceClient(
+    provider="hf-inference",
+    api_key=HF_TOKEN,
 )
 
 
-def is_stable_diffusion_available() -> bool:
-    """Verifica rapidamente se o AUTOMATIC1111 está a correr e acessível."""
-    try:
-        resp = requests.get(f"{SD_API_URL}/sdapi/v1/sd-models", timeout=3)
-        return resp.status_code == 200
-    except requests.RequestException:
-        return False
+DEFAULT_NEGATIVE_PROMPT = (
+    "low quality, blurry, bad anatomy, deformed, watermark, text, "
+    "extra fingers, cropped, worst quality"
+)
 
 
-def generate_image(
-    prompt: str,
-    negative_prompt: str = DEFAULT_NEGATIVE_PROMPT,
-    steps: int = 25,
-    width: int = 512,
-    height: int = 512,
-) -> str:
-    """
-    Pede ao AUTOMATIC1111 para gerar uma imagem a partir do prompt.
-    Devolve a imagem como string base64 (sem prefixo "data:image/...").
-    Lança requests.RequestException se o servidor não estiver acessível.
-    """
-    payload = {
-        "prompt": prompt,
-        "negative_prompt": negative_prompt,
-        "steps": steps,
-        "width": width,
-        "height": height,
-        "sampler_name": "DPM++ 2M",
-        "cfg_scale": 7,
-    }
-    resp = requests.post(
-        f"{SD_API_URL}/sdapi/v1/txt2img", json=payload, timeout=300
+class ImageToolInput(BaseModel):
+
+    prompt: str = Field(
+        description="Prompt detalhado da imagem."
     )
-    resp.raise_for_status()
-    data = resp.json()
-    images = data.get("images") or []
-    if not images:
-        raise RuntimeError("O AUTOMATIC1111 não devolveu nenhuma imagem.")
-    return images[0]
+
+    negative_prompt: str = Field(
+        default=DEFAULT_NEGATIVE_PROMPT,
+        description="Prompt negativo."
+    )
+
+    width: int = Field(
+        default=1024,
+        description="Largura da imagem."
+    )
+
+    height: int = Field(
+        default=1024,
+        description="Altura da imagem."
+    )
+
+    steps: int = Field(
+        default=30,
+        description="Número de passos."
+    )
+
+    cfg_scale: float = Field(
+        default=7,
+        description="CFG Scale."
+    )
+
+
+class ImageTool(BaseTool):
+
+    name: str = "ImageTool"
+
+    description: str = (
+        """
+        Ferramenta responsável pela geração de imagens.
+
+        Recebe um prompt completo e gera uma imagem.
+
+        O prompt fornecido já deve estar totalmente otimizado.
+
+        A ferramenta não melhora prompts nem interpreta pedidos do utilizador.
+        """
+    )
+
+    args_schema: Type[BaseModel] = ImageToolInput
+
+    def _refine_prompt(self, user_prompt: str):
+
+        instruction = f"""
+Transform the following request into a professional Stable Diffusion prompt.
+
+Rules:
+
+- Only output the prompt.
+- Never explain.
+- Never use quotes.
+- Extremely detailed.
+- Include lighting.
+- Include camera.
+- Include composition.
+- Include artistic style.
+- Include quality tags.
+- Include colours.
+- Include atmosphere.
+
+Request:
+
+{user_prompt}
+"""
+
+        kwargs = {
+            "model": MODEL_NAME,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": instruction
+                }
+            ]
+        }
+
+        if MODEL_NAME.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
+            kwargs["api_base"] = os.getenv("OLLAMA_API_BASE")
+
+        try:
+
+            response = litellm.completion(**kwargs)
+
+            return response.choices[0].message.content.strip()
+
+        except Exception:
+
+            return user_prompt
+
+    # NOTA: esta tool já não é usada através de um Agent do CrewAI (ver
+    # app.py — é chamada diretamente para evitar que o base64 passe pelo
+    # LLM). Por isso pode devolver um dict em vez de apenas uma string.
+    def _run(
+        self,
+        prompt: str,
+        negative_prompt: str = DEFAULT_NEGATIVE_PROMPT,
+        width = 1024,
+        height = 1024,
+        steps = 28,
+        cfg_scale = 3.5
+    ):
+
+        prompt_refinado = self._refine_prompt(prompt)
+
+        image = client.text_to_image(
+
+            prompt=prompt_refinado,
+
+            model=IMAGE_MODEL,
+
+            width=width,
+
+            height=height
+
+        )
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"imagem_{timestamp}.png"
+        filepath = os.path.join(IMAGENS_DIR, filename)
+        image.save(filepath, format="PNG")
+
+        buffer = io.BytesIO()
+
+        image.save(buffer, format="PNG")
+
+        return {
+            "base64": base64.b64encode(buffer.getvalue()).decode(),
+            "filename": filename,
+            "path": filepath,
+        }

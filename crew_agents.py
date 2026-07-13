@@ -213,6 +213,7 @@ def build_tasks(user_message: str, history_text: str, language="pt", include_ema
     # Pipeline normal (sem email)
     # ------------------------------------------------------------------ #
 
+
     tarefa_coordenacao = Task(
         description=(
             f"{contexto_conversa}\n\n"
