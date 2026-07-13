@@ -41,6 +41,7 @@ AGENT_LABELS = {
     "Pesquisador": "🔎 Pesquisador a reunir informação...",
     "Especialista Técnico": "🛠️ Especialista a preparar o conteúdo técnico...",
     "Redator Final": "✍️ Redator a escrever a resposta final...",
+    "Assistente de Email": "📧 A verificar o email...",
 }
 
 # Palavras-chave simples para decidir se o pedido é de geração de imagem.
@@ -51,12 +52,26 @@ IMAGE_KEYWORDS = (
     "draw", "generate an image", "create an image", "picture of", "sketch",
 )
 
+EMAIL_KEYWORDS = (
+    "email", "emails", "gmail", "outlook",
+    "fatura", "invoice", "anexo", "recibo",
+)
+
 MAX_OCR_CONTEXT_CHARS = 4000
 
 
 def is_image_request(message: str) -> bool:
     m = message.lower()
     return any(keyword in m for keyword in IMAGE_KEYWORDS)
+
+def is_email_request(message):
+
+    message = message.lower()
+
+    return any(
+        k in message
+        for k in EMAIL_KEYWORDS
+    )
 
 
 def get_history_text(session_id: str) -> str:
@@ -151,7 +166,9 @@ def chat():
 
     logger = CrewLogger()
 
-    resposta = run_crew(user_message, history_text)
+    resposta = run_crew(
+        user_message, history_text, include_email=is_email_request(user_message)
+    )
     save_message(session_id, "assistant", resposta)
 
     payload = {"session_id": session_id, "type": "text", "reply": resposta}
@@ -241,7 +258,14 @@ def chat_stream():
 
             logger.user(user_message)
 
-            resposta = run_crew(user_message, history_text, language=language, logger=logger, task_callback=task_callback)
+            resposta = run_crew(
+                user_message,
+                history_text,
+                language=language,
+                logger=logger,
+                task_callback=task_callback,
+                include_email=is_email_request(user_message),
+            )
             save_message(session_id, "assistant", resposta)
             q.put({"type": "final", "reply": resposta, "session_id": session_id})
 

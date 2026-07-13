@@ -12,22 +12,24 @@ trabalhar em tempo real).
 ## Como funciona a equipa de agentes
 
 ```
-Humano
-  │
-  ▼
-🧭 Coordenador de Atendimento   → entende o pedido e faz um plano
-  │
-  ▼
-🔎 Pesquisador                  → reúne informação relevante
-  │
-  ▼
-🛠️ Especialista Técnico         → aprofunda tecnicamente
-  │
-  ▼
-✍️ Redator Final                → escreve a resposta final ao humano
-  │
-  ▼
-Resposta mostrada no chat
+Utilizador
+     │
+     ▼
+🧭 Coordenador
+     │
+     ├──────────────┐
+     ▼              ▼
+🔎 Pesquisador   📧 Assistente de Email
+     │              │
+     ▼              │
+🛠️ Especialista     │
+     │              │
+     └──────┬───────┘
+            ▼
+✍️ Redator Final
+            │
+            ▼
+Resposta apresentada no chat
 ```
 
 Cada agente recebe o output dos anteriores como contexto (`context=[...]`
