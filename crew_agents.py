@@ -29,6 +29,7 @@ from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
 from logger import CrewLogger
 from datetime import datetime
+from tools.email_tool import EmailTool
 import time
 
 from contextlib import redirect_stdout
@@ -94,6 +95,20 @@ def build_agents():
         llm=MODEL_NAME,
     )
 
+    email_agent = Agent(
+        role="Assistente de Email",
+        goal=(
+            "Gerir e analisar emails utilizando exclusivamente a EmailTool. "
+            "És capaz de ler, pesquisar, resumir, classificar, contar, descarregar "
+            "anexos e gerar relatórios. Nunca assumes que o utilizador procura "
+            "apenas faturas."
+        ),
+        backstory="Especialista em Outlook, Gmail e IMAP.",
+        tools=[EmailTool()],
+        verbose=True,
+        llm=MODEL_NAME,
+    )
+
     redator = Agent(
         role="Redator Final",
         goal=(
@@ -111,11 +126,11 @@ def build_agents():
         llm=MODEL_NAME,
     )
 
-    return coordenador, pesquisador, especialista, redator
+    return coordenador, pesquisador, especialista, email_agent, redator
 
 
-def build_tasks(user_message: str, history_text: str, language="pt"):
-    coordenador, pesquisador, especialista, redator = build_agents()
+def build_tasks(user_message: str, history_text: str, language="pt", include_email: bool = False):
+    coordenador, pesquisador, especialista, email_agent, redator = build_agents()
 
     if language == "pt":
         language_instruction = (
@@ -130,7 +145,73 @@ def build_tasks(user_message: str, history_text: str, language="pt"):
         f"{language_instruction}\n\n"
         f"Histórico recente da conversa (pode estar vazio):\n{history_text}\n\n"
         f"Nova mensagem do humano:\n{user_message}"
-    )   
+    )
+
+    # ------------------------------------------------------------------ #
+    # Pedidos de email: pipeline dedicado e curto.
+    #
+    # Coordenador/Pesquisador/Especialista não têm qualquer acesso à caixa
+    # de correio real. Ao "planearem" e darem "exemplos ilustrativos" sobre
+    # emails que não existem, contaminam o contexto do Redator com números
+    # e nomes inventados, que depois são apresentados como se fossem reais.
+    # Por isso, para pedidos de email, vai-se diretamente do pedido do
+    # humano para o Assistente de Email (única fonte de verdade, via
+    # EmailTool) e depois para o Redator.
+    # ------------------------------------------------------------------ #
+    if include_email:
+        tarefa_email = Task(
+            description=(
+                f"{language_instruction}\n\n"
+                f"Mensagem do humano: {user_message}\n\n"
+                "É obrigatório responder chamando a EmailTool — nunca respondas "
+                "com conhecimento próprio nem inventes números, nomes de "
+                "ficheiros ou datas. Analisa o pedido do humano e chama a "
+                "ferramenta com os parâmetros adequados (ex: subject_keyword "
+                "com a palavra do assunto mencionada pelo humano; "
+                "unread_only=True se o humano falar em emails não lidos/por "
+                "ler). Devolve exatamente o resultado devolvido pela "
+                "ferramenta, sem adicionar exemplos, suposições ou dados que "
+                "não vieram da ferramenta. Se a ferramenta falhar ou devolver "
+                "um erro, responde apenas com esse erro tal como veio, nunca "
+                "inventes um resultado alternativo."
+            ),
+            expected_output=(
+                "O resultado exato devolvido pela EmailTool (contagem real, "
+                "lista real de emails, ou mensagem de erro real) — nunca um "
+                "exemplo, suposição ou número inventado."
+            ),
+            agent=email_agent,
+        )
+
+        tarefa_redacao = Task(
+            description=(
+                f"{language_instruction}\n\n"
+                """Pega EXATAMENTE no resultado devolvido pelo Assistente de
+                Email (tarefa anterior) e reescreve-o numa resposta final
+                clara e simpática para o humano.
+
+                REGRAS ABSOLUTAS:
+                - Nunca inventes, arredondes, estimes ou "exemplifiques"
+                  números, nomes de ficheiros, datas ou remetentes que não
+                  estejam literalmente no resultado do Assistente de Email.
+                - Se o Assistente de Email reportou um erro ou falha de
+                  autenticação, a tua resposta final tem de comunicar esse
+                  erro claramente ao humano — nunca o substituas por um
+                  resultado inventado.
+                - Escreve exclusivamente no idioma indicado acima.
+                - Não menciones os outros agentes nem o processo interno.
+                """
+            ),
+            expected_output="Resposta final, fiel ao resultado real da EmailTool, pronta a mostrar ao humano.",
+            agent=redator,
+            context=[tarefa_email],
+        )
+
+        return [tarefa_email, tarefa_redacao]
+
+    # ------------------------------------------------------------------ #
+    # Pipeline normal (sem email)
+    # ------------------------------------------------------------------ #
 
     tarefa_coordenacao = Task(
         description=(
@@ -194,20 +275,30 @@ def build_tasks(user_message: str, history_text: str, language="pt"):
     return [tarefa_coordenacao, tarefa_pesquisa, tarefa_especialista, tarefa_redacao]
 
 
-def run_crew(user_message: str, history_text: str = "", language="pt", logger=None, task_callback=None):
+def run_crew(
+    user_message: str,
+    history_text: str = "",
+    language="pt",
+    logger=None,
+    task_callback=None,
+    include_email: bool = False,
+):
     """
     Executa a crew de forma síncrona e devolve a resposta final (string).
     `task_callback`, se fornecido, é chamado pelo CrewAI após cada tarefa
     concluída, permitindo emitir progresso em tempo real (ex: via SSE).
+    `include_email`, se True, adiciona o Assistente de Email ao pipeline
+    (só deve ser True quando o pedido do humano é claramente sobre email).
     """
 
     if logger is None:
         logger = CrewLogger()
-    
+
     tasks = build_tasks(
         user_message=user_message,
         history_text=history_text,
-        language=language
+        language=language,
+        include_email=include_email,
     )
 
     crew = Crew(
