@@ -898,6 +898,34 @@ body {
   outline-offset: 2px;
 }
 
+.msg-copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+
+    width: 32px;
+    height: 32px;
+
+    border: none;
+    border-radius: 8px;
+
+    cursor: pointer;
+
+    background: rgba(255,255,255,.08);
+    color: inherit;
+
+    opacity: 0;
+    transition: .2s;
+}
+
+.msg:hover .msg-copy {
+    opacity: 1;
+}
+
+.msg {
+    position: relative;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 560px) {

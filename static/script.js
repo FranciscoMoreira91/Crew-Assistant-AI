@@ -398,12 +398,52 @@ function addQuoteToMessage(msgEl, quotedText) {
   msgEl.insertBefore(quote, msgEl.firstChild);
 }
 
+function addCopyButton(messageEl, text) {
+
+    const btn = document.createElement("button");
+    btn.className = "msg-copy";
+    btn.innerHTML = "📋";
+    btn.title = "Copiar resposta";
+
+    btn.onclick = async (e) => {
+
+        e.stopPropagation();
+
+        try {
+
+            await navigator.clipboard.writeText(text);
+
+            btn.innerHTML = "✅";
+
+            setTimeout(() => {
+                btn.innerHTML = "📋";
+            }, 1500);
+
+        } catch {
+
+            btn.innerHTML = "❌";
+
+            setTimeout(() => {
+                btn.innerHTML = "📋";
+            }, 1500);
+
+        }
+
+    };
+
+    messageEl.appendChild(btn);
+
+}
+
 function addMessage(text, role) {
   removeEmptyState();
   const div = document.createElement('div');
   div.className = `msg msg--${role}`;
   div.textContent = text;
-  if (role === 'assistant') addReplyButton(div, text);
+  if (role === 'assistant') {
+    addReplyButton(div, text);
+    addCopyButton(div, text);
+  }
   chatMessagesEl.appendChild(wrapWithAvatar(div, role));
   scrollToBottom();
   return div;
