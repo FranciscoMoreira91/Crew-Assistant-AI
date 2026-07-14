@@ -534,6 +534,7 @@ body {
 }
 
 .msg {
+  position: relative;
   min-width: 0;
   padding: 12px 16px;
   border-radius: 14px;
@@ -593,6 +594,120 @@ body {
   font-family: var(--font-mono);
   font-size: 12.5px;
   padding: 9px 14px;
+}
+
+/* ---------- Responder a uma mensagem ---------- */
+
+.reply-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+
+  padding: 10px 14px;
+  border-radius: 10px;
+  border-left: 3px solid var(--accent-user);
+  background: var(--panel-alt);
+}
+
+.reply-preview[hidden] {
+  display: none;
+}
+
+.reply-preview__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.reply-preview__label {
+  margin: 0 0 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--accent-user);
+}
+
+.reply-preview__text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-preview__close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: .2s;
+}
+
+.reply-preview__close:hover {
+  background: rgba(255, 0, 0, .12);
+  color: #ef4444;
+}
+
+.msg__reply-btn {
+  position: absolute;
+  top: -10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity .15s, transform .15s, color .15s, border-color .15s;
+}
+
+.msg-row--assistant .msg__reply-btn {
+  right: -10px;
+}
+
+.msg-row:hover .msg__reply-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.msg__reply-btn:hover {
+  color: var(--accent-user);
+  border-color: var(--accent-user);
+}
+
+.msg__quote {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: inherit;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg--assistant .msg__quote {
+  border-left-color: var(--accent-user);
+  background: var(--panel-alt);
+  color: var(--text-muted);
 }
 
 /* ---------- Attachments ---------- */

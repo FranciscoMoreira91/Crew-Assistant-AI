@@ -163,7 +163,9 @@ def build_tasks(user_message: str, history_text: str, language="pt", include_ema
             description=(
                 f"{language_instruction}\n\n"
                 f"Mensagem do humano: {user_message}\n\n"
-                "É obrigatório responder chamando a EmailTool — nunca respondas "
+                + (f"Contexto adicional (histórico e/ou mensagem a que o "
+                   f"humano está a responder):\n{history_text}\n\n" if history_text else "")
+                + "É obrigatório responder chamando a EmailTool — nunca respondas "
                 "com conhecimento próprio nem inventes números, nomes de "
                 "ficheiros ou datas. Analisa o pedido do humano e chama a "
                 "ferramenta com os parâmetros adequados (ex: subject_keyword "

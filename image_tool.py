@@ -1,5 +1,6 @@
 import os
 import io
+import time
 import base64
 import litellm
 
@@ -19,12 +20,20 @@ IMAGE_MODEL = os.getenv(
     "black-forest-labs/FLUX.1-schnell"
 )
 
+# O provider "hf-inference" (serverless, gratuito) tem estado instável com
+# alguns modelos, com erros 500/503 intermitentes já reportados por vários
+# utilizadores nos fóruns da Hugging Face. Se isso acontecer com frequência,
+# define no .env, por exemplo, IMAGE_PROVIDER=fal-ai (outros providers
+# disponíveis para a maioria dos modelos: "replicate", "together", etc. —
+# consulta a página do modelo em huggingface.co, botão "Use this model").
+IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "hf-inference")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IMAGENS_DIR = os.path.join(BASE_DIR, "imagens")
 os.makedirs(IMAGENS_DIR, exist_ok=True)
 
 client = InferenceClient(
-    provider="hf-inference",
+    provider=IMAGE_PROVIDER,
     api_key=HF_TOKEN,
 )
 
@@ -147,17 +156,33 @@ Request:
 
         prompt_refinado = self._refine_prompt(prompt)
 
-        image = client.text_to_image(
+        # O provider de inferência (ver IMAGE_PROVIDER no .env) por vezes
+        # devolve erros 500/503 transitórios — tenta algumas vezes antes
+        # de desistir, com uma pequena pausa entre tentativas.
+        ultimo_erro = None
+        image = None
+        for tentativa in range(1, 4):
+            try:
+                image = client.text_to_image(
+                    prompt=prompt_refinado,
+                    model=IMAGE_MODEL,
+                    width=width,
+                    height=height
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                ultimo_erro = exc
+                if tentativa < 3:
+                    time.sleep(2 * tentativa)
 
-            prompt=prompt_refinado,
-
-            model=IMAGE_MODEL,
-
-            width=width,
-
-            height=height
-
-        )
+        if image is None:
+            raise RuntimeError(
+                f"O provider de imagem ('{IMAGE_PROVIDER}') falhou após 3 "
+                f"tentativas. Isto costuma ser uma instabilidade temporária "
+                f"do lado do fornecedor — tenta novamente daqui a pouco, ou "
+                f"muda IMAGE_PROVIDER no .env (ex: 'fal-ai'). "
+                f"Erro original: {ultimo_erro}"
+            )
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"imagem_{timestamp}.png"
