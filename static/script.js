@@ -15,6 +15,9 @@ const relayProgressEl = document.getElementById('relayProgress');
 const attachBtn = document.getElementById('attachBtn');
 const fileInput = document.getElementById('fileInput');
 const attachmentsPreviewEl = document.getElementById('attachmentsPreview');
+const replyPreviewEl = document.getElementById('replyPreview');
+const replyPreviewTextEl = document.getElementById('replyPreviewText');
+const replyPreviewCloseBtn = document.getElementById('replyPreviewClose');
 
 const NODE_ORDER = ['coordenador', 'pesquisador', 'especialista', 'redator'];
 
@@ -32,6 +35,7 @@ let conversations =
 let currentConversation = [];
 let sessionId = localStorage.getItem('crew_session_id') || null;
 let pendingAttachments = []; // { name, dataUrl }
+let replyingTo = null; // texto da mensagem do assistente a que se está a responder
 
 let translations = {};
 
@@ -347,20 +351,70 @@ function wrapWithAvatar(msgEl, role, extraClass) {
   return row;
 }
 
+const REPLY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+  <path d="M9 14L4 9L9 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4 9H14C18 9 20 12 20 16V19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+function setReplyTarget(text) {
+  replyingTo = text;
+  replyPreviewTextEl.textContent = text;
+  replyPreviewEl.hidden = false;
+  inputEl.focus();
+}
+
+function clearReplyTarget() {
+  replyingTo = null;
+  replyPreviewTextEl.textContent = '';
+  replyPreviewEl.hidden = true;
+}
+
+replyPreviewCloseBtn.addEventListener('click', clearReplyTarget);
+
+/**
+ * Adiciona, dentro da bolha de uma mensagem do assistente, um botãozinho
+ * que permite responder diretamente a essa mensagem (visível ao passar o
+ * rato, via CSS em .msg-row:hover .msg__reply-btn).
+ */
+function addReplyButton(msgEl, textoParaCitar) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'msg__reply-btn';
+  btn.title = 'Responder a esta mensagem';
+  btn.innerHTML = REPLY_ICON;
+  btn.addEventListener('click', () => setReplyTarget(textoParaCitar));
+  msgEl.appendChild(btn);
+}
+
+/**
+ * Se a mensagem do humano foi enviada como resposta a uma mensagem
+ * anterior do assistente, mostra essa citação no topo da própria bolha.
+ */
+function addQuoteToMessage(msgEl, quotedText) {
+  if (!quotedText) return;
+  const quote = document.createElement('p');
+  quote.className = 'msg__quote';
+  quote.textContent = quotedText;
+  msgEl.insertBefore(quote, msgEl.firstChild);
+}
+
 function addMessage(text, role) {
   removeEmptyState();
   const div = document.createElement('div');
   div.className = `msg msg--${role}`;
   div.textContent = text;
+  if (role === 'assistant') addReplyButton(div, text);
   chatMessagesEl.appendChild(wrapWithAvatar(div, role));
   scrollToBottom();
   return div;
 }
 
-function addUserMessageWithAttachments(text, images) {
+function addUserMessageWithAttachments(text, images, quotedText) {
   removeEmptyState();
   const div = document.createElement('div');
   div.className = 'msg msg--user';
+
+  if (quotedText) addQuoteToMessage(div, quotedText);
 
   if (images && images.length) {
     const grid = document.createElement('div');
@@ -530,8 +584,8 @@ fileInput.addEventListener('change', async (e) => {
 
 /* ---------------- Envio de mensagens ---------------- */
 
-async function sendMessage(message, images) {
-  addUserMessageWithAttachments(message, images);
+async function sendMessage(message, images, replyTo) {
+  addUserMessageWithAttachments(message, images, replyTo);
   currentConversation.push({
     role: "user",
     text: message || "[Imagem]"
@@ -551,7 +605,7 @@ async function sendMessage(message, images) {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, language: currentLanguage,images, session_id: sessionId }),
+      body: JSON.stringify({ message, language: currentLanguage, images, session_id: sessionId, reply_to: replyTo || null }),
     });
 
     const reader = response.body.getReader();
@@ -638,11 +692,14 @@ composerEl.addEventListener('submit', (e) => {
 
   if (!message && images.length === 0) return;
 
+  const replyTo = replyingTo;
+
   inputEl.value = '';
   pendingAttachments = [];
   renderAttachmentsPreview();
+  clearReplyTarget();
 
-  sendMessage(message, images);
+  sendMessage(message, images, replyTo);
   renderHistory();
 });
 

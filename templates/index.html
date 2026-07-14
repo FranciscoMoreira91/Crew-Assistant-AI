@@ -127,6 +127,14 @@
 
       <div class="attachments" id="attachmentsPreview"></div>
 
+      <div class="reply-preview" id="replyPreview" hidden>
+        <div class="reply-preview__content">
+          <p class="reply-preview__label">A responder a</p>
+          <p class="reply-preview__text" id="replyPreviewText"></p>
+        </div>
+        <button type="button" class="reply-preview__close" id="replyPreviewClose" aria-label="Cancelar resposta">×</button>
+      </div>
+
       <form class="composer" id="composer" autocomplete="off">
         <button type="button" class="composer__attach" id="attachBtn" title="Anexar imagens">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
