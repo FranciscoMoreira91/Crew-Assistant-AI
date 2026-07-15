@@ -51,46 +51,41 @@
 
           </div>
 
-          <button id="themeToggle" class="theme-toggle">
-            <span id="themeIcon">🌙</span>
-          </button>
+          <div class="header-actions">
 
-          <div class="language-selector">
+            <div class="language-selector">
 
-            <button id="languageButton">
+              <button id="languageButton">
 
-              <img id="languageFlag" src="/static/img/flags/pt.svg">
+                <img id="languageFlag" src="/static/img/flags/pt.svg">
 
-              <span id="languageCode">
+                <span id="languageCode">
+                  PT
+                </span>
 
-                PT
+              </button>
 
-              </span>
+              <div id="languageMenu" class="language-menu">
 
-            </button>
+                <div class="language-item" data-lang="pt">
+                  <img src="/static/img/flags/pt.svg">
+                  Português
+                </div>
 
-            <div id="languageMenu" class="language-menu">
-
-              <div class="language-item" data-lang="pt">
-
-                <img src="/static/img/flags/pt.svg">
-
-                Português
-
-              </div>
-
-              <div class="language-item" data-lang="en">
-
-                <img src="/static/img/flags/en.svg">
-
-                English
+                <div class="language-item" data-lang="en">
+                  <img src="/static/img/flags/en.svg">
+                  English
+                </div>
 
               </div>
 
             </div>
 
-          </div>
+            <button id="themeToggle" class="theme-toggle">
+              <span id="themeIcon">🌙</span>
+            </button>
 
+          </div>
         </div>
 
         <div class="relay" id="relay">
@@ -132,7 +127,8 @@
           <p class="reply-preview__label">A responder a</p>
           <p class="reply-preview__text" id="replyPreviewText"></p>
         </div>
-        <button type="button" class="reply-preview__close" id="replyPreviewClose" aria-label="Cancelar resposta">×</button>
+        <button type="button" class="reply-preview__close" id="replyPreviewClose"
+          aria-label="Cancelar resposta">×</button>
       </div>
 
       <form class="composer" id="composer" autocomplete="off">
@@ -144,8 +140,8 @@
           </svg>
         </button>
         <input type="file" id="fileInput" accept="image/*" multiple hidden />
-        <input type="text" id="messageInput" class="composer__input"
-          data-i18n-placeholder="placeholder" autocomplete="off" />
+        <input type="text" id="messageInput" class="composer__input" data-i18n-placeholder="placeholder"
+          autocomplete="off" />
         <button type="submit" class="composer__send" id="sendBtn">
           <span data-i18n="send">Enviar</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
