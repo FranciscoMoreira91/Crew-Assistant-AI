@@ -13,6 +13,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
+<div class="floating-logo">
+    <img src="{{ url_for('static', filename='img/logo.png') }}"
+         class="floating-logo-image"
+         alt="Crew Assistant">
+</div>
+
 <body>
 
   <div class="layout">
@@ -36,8 +42,6 @@
         <div class="header__top">
 
           <div class="header__brand">
-
-            <img src="{{ url_for('static', filename='img/logo.png') }}" class="logo" alt="Crew Assistant">
 
             <div>
 
