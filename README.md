@@ -124,6 +124,14 @@ abaixo), define também:
 ```
 HF_TOKEN=<o teu token da Hugging Face>
 IMAGE_MODEL=black-forest-labs/FLUX.1-schnell
+IMAGE_PROVIDER=hf-inference
+```
+
+Para a funcionalidade de **geração de vídeos** (ver secção própria
+abaixo), define também (usa o mesmo `HF_TOKEN` de cima):
+```
+VIDEO_MODEL=Wan-AI/Wan2.2-TI2V-5B
+VIDEO_PROVIDER=fal-ai
 ```
 
 ## Executar
@@ -206,6 +214,7 @@ Este sistema facilita a depuração, auditoria e análise do comportamento da Cr
   - `PDF/` — PDFs pesquisáveis criados a partir de anexos de imagem (OCR) e
     faturas descarregadas por email.
   - `imagens/` — imagens geradas pela `ImageTool`.
+  - `videos/` — vídeos gerados pela `VideoTool`.
   - `logs/` — um ficheiro de log por conversa, com o detalhe de cada agente.
 - **Segurança:** o `.env` contém credenciais reais (password de email,
   token da Hugging Face, chaves de API). Nunca o commits para o git —
@@ -330,6 +339,35 @@ isto com login simples.
 >    obter o `access_token` via `outlook_auth.get_access_token()` e fazer
 >    `mail.authenticate("XOAUTH2", ...)` em vez de `mail.login(...)`.
 
+## Geração de vídeos
+
+No chat, pedidos com palavras como "gera um vídeo", "cria um vídeo" ou
+"vídeo de" ativam a geração de vídeo — pelo mesmo princípio da imagem (ver
+acima), a `VideoTool` (`video_tool.py`) é chamada **diretamente** pelo
+`app.py`, nunca através de um Agent do CrewAI (um vídeo é ainda maior que
+uma imagem em base64, por isso faz ainda menos sentido tentar fazê-lo
+"passar" pela resposta de um LLM).
+
+1. O LLM refina o prompt do humano (mais conciso do que para imagem — os
+   modelos de vídeo funcionam melhor com descrições diretas de 2-4 frases:
+   sujeito, cena, movimento/ação, câmara, iluminação).
+2. Esse prompt é enviado à Hugging Face (modelo `VIDEO_MODEL`, por omissão
+   `Wan-AI/Wan2.2-TI2V-5B`, via provider `VIDEO_PROVIDER`, por omissão
+   `fal-ai` — os mesmos recomendados na documentação oficial da HF para
+   texto-para-vídeo).
+3. O ficheiro `.mp4` é guardado em `videos/video_AAAAMMDD_HHMMSS.mp4` na
+   raiz do projeto (pasta criada automaticamente) e é servido ao chat via
+   `/videos/<filename>` — ao contrário da imagem, o vídeo **não** é
+   enviado em base64 (seria demasiado grande para uma resposta JSON), o
+   `<video>` no chat aponta diretamente para essa URL.
+
+**Pré-requisito:** o mesmo `HF_TOKEN` já usado para imagens.
+
+**⚠️ Consome muitos mais créditos/tempo do que a geração de imagem.** É
+fácil esgotar a quota gratuita da Hugging Face rapidamente — ver a nota de
+gestão de créditos na secção de imagens acima; aplica-se aqui com ainda
+mais força. A geração pode demorar vários minutos.
+
 ## Geração de imagens
 
 No chat, pedidos com palavras como "desenha", "gera uma imagem", "cria uma
@@ -353,6 +391,22 @@ partidas. Por isso o `app.py` chama a `ImageTool` (`image_tool.py`)
 
 **Pré-requisito:** um token da Hugging Face em `HF_TOKEN` no `.env`
 (gera um em https://huggingface.co/settings/tokens).
+
+**Gestão de créditos e providers:** a Hugging Face dá uma quota mensal
+gratuita de créditos para os *Inference Providers*, partilhada entre todos
+os providers (`hf-inference`, `fal-ai`, etc.) — não é por modelo. Erros
+comuns:
+- `500`/`503` intermitente → normalmente instabilidade temporária do
+  provider (`IMAGE_TOOL` já tenta 3 vezes automaticamente antes de
+  desistir). Podes trocar de provider no `.env`:
+  ```
+  IMAGE_PROVIDER=fal-ai
+  ```
+- `402 Payment Required` / "depleted your monthly included credits" →
+  esgotaste a quota gratuita da conta (isto é ao nível da conta HF, não do
+  modelo — trocar de modelo ou provider não resolve). Opções: esperar pelo
+  reset mensal, comprar créditos pré-pagos, ou assinar o plano PRO (20x
+  mais quota incluída). Ver https://huggingface.co/settings/billing.
 
 Os ficheiros relevantes são `image_tool.py` (refinamento do prompt +
 chamada à API da Hugging Face + gravação em disco) e as rotas em `app.py`.

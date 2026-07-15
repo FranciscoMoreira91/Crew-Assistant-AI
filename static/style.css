@@ -568,7 +568,8 @@ body {
   border-bottom-left-radius: 4px;
 }
 
-.msg--image {
+.msg--image,
+.msg--video {
   padding: 10px;
   max-width: 100%;
 }
@@ -577,6 +578,13 @@ body {
   width: 100%;
   border-radius: 10px;
   display: block;
+}
+
+.msg__video {
+  width: 100%;
+  border-radius: 10px;
+  display: block;
+  background: #000;
 }
 
 .msg__caption {

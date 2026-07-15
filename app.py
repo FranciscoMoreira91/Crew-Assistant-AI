@@ -28,8 +28,10 @@ from flask_cors import CORS
 from crew_agents import run_crew
 from ocr_tool import images_to_searchable_pdf, PDF_DIR
 from image_tool import ImageTool, IMAGENS_DIR
+from video_tool import VideoTool, VIDEOS_DIR
 
 image_tool = ImageTool()
+video_tool = VideoTool()
 
 app = Flask(__name__)
 CORS(app)
@@ -59,6 +61,13 @@ IMAGE_KEYWORDS = (
     "draw", "generate an image", "create an image", "picture of", "sketch",
 )
 
+VIDEO_KEYWORDS = (
+    "gera um vídeo", "gera um video", "gerar um vídeo", "gerar um video",
+    "cria um vídeo", "cria um video", "criar um vídeo", "criar um video",
+    "faz um vídeo", "faz um video", "vídeo de", "video de", "animação de",
+    "generate a video", "create a video", "make a video", "video of",
+)
+
 MAX_OCR_CONTEXT_CHARS = 4000
 
 
@@ -77,6 +86,11 @@ def is_image_request(message: str) -> bool:
     return any(keyword in m for keyword in IMAGE_KEYWORDS)
 
 
+def is_video_request(message: str) -> bool:
+    m = message.lower()
+    return any(keyword in m for keyword in VIDEO_KEYWORDS)
+
+
 def get_history_text(session_id: str) -> str:
     history = CONVERSATIONS.get(session_id, [])
     linhas = []
@@ -84,6 +98,24 @@ def get_history_text(session_id: str) -> str:
         quem = "Humano" if msg["role"] == "user" else "Assistente"
         linhas.append(f"{quem}: {msg['content']}")
     return "\n".join(linhas)
+
+
+def build_reply_context(reply_to: str) -> str:
+    """
+    Se o humano respondeu diretamente a uma mensagem anterior do
+    assistente (via botão de "responder" no chat), devolve um bloco de
+    contexto explícito para os agentes saberem exatamente a que ponto se
+    referem — para responderem de imediato e de forma focada, sem terem
+    de adivinhar a partir do histórico geral.
+    """
+    if not reply_to:
+        return ""
+    return (
+        "\n\n[O humano está a responder DIRETAMENTE a esta mensagem tua "
+        "anterior — a tua resposta deve focar-se especificamente neste "
+        "ponto, sem rodeios]:\n"
+        f"{reply_to}"
+    )
 
 
 def save_message(session_id: str, role: str, content: str):
@@ -113,12 +145,18 @@ def download_imagem(filename):
     return send_from_directory(IMAGENS_DIR, filename, as_attachment=False)
 
 
+@app.route("/videos/<path:filename>")
+def download_video(filename):
+    return send_from_directory(VIDEOS_DIR, filename, as_attachment=False)
+
+
 @app.route("/api/chat", methods=["POST"])
 def chat():
     data = request.get_json(force=True) or {}
     user_message = (data.get("message") or "").strip()
     images_in = data.get("images") or []
     session_id = data.get("session_id") or str(uuid.uuid4())
+    reply_to = (data.get("reply_to") or "").strip()
 
     if not user_message and not images_in:
         return jsonify({"error": "Mensagem vazia."}), 400
@@ -156,9 +194,25 @@ def chat():
                 "reply": f"PDF criado com {attachment_info['pages']} página(s).",
             })
 
-    history_text = get_history_text(session_id) + extra_context
+    history_text = get_history_text(session_id) + extra_context + build_reply_context(reply_to)
 
     logger = CrewLogger()
+
+    if is_video_request(user_message):
+        try:
+            resultado_video = video_tool._run(prompt=user_message)
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": f"Não consegui gerar o vídeo: {exc}"}), 502
+
+        save_message(session_id, "assistant", "[Vídeo gerado]")
+        payload = {
+            "session_id": session_id,
+            "type": "video",
+            "video_url": f"/videos/{resultado_video['filename']}",
+        }
+        if attachment_info:
+            payload["attachment"] = attachment_info
+        return jsonify(payload)
 
     if is_image_request(user_message):
         try:
@@ -195,6 +249,7 @@ def chat_stream():
     images_in = data.get("images") or []
     session_id = data.get("session_id") or str(uuid.uuid4())
     language = data.get("language", "pt")
+    reply_to = (data.get("reply_to") or "").strip()
 
     if not user_message and not images_in:
         return jsonify({"error": "Mensagem vazia."}), 400
@@ -247,7 +302,26 @@ def chat_stream():
                     })
                     return
 
-            # 3) Pedido de imagem -> ImageTool chamada diretamente (nunca
+            # 3) Pedido de vídeo -> VideoTool chamada diretamente (mesmo
+            #    motivo da imagem: um vídeo é maior ainda, não pode passar
+            #    pelo LLM)
+            if is_video_request(user_message):
+                q.put({"type": "video_progress", "label": "🎥 A gerar o vídeo (pode demorar vários minutos)..."})
+                try:
+                    resultado_video = video_tool._run(prompt=user_message)
+                except Exception as exc:  # noqa: BLE001
+                    q.put({"type": "error", "message": f"Não consegui gerar o vídeo: {exc}"})
+                    return
+
+                save_message(session_id, "assistant", "[Vídeo gerado]")
+                q.put({
+                    "type": "video",
+                    "video_url": f"/videos/{resultado_video['filename']}",
+                    "session_id": session_id,
+                })
+                return
+
+            # 4) Pedido de imagem -> ImageTool chamada diretamente (nunca
             #    através do CrewAI/LLM, para não corromper o base64)
             if is_image_request(user_message):
                 q.put({"type": "image_progress", "label": "🎨 A gerar a imagem (pode demorar um pouco)..."})
@@ -266,8 +340,8 @@ def chat_stream():
                 })
                 return
 
-            # 4) Pedido normal de texto -> crew de agentes
-            history_text = get_history_text(session_id) + extra_context
+            # 5) Pedido normal de texto -> crew de agentes
+            history_text = get_history_text(session_id) + extra_context + build_reply_context(reply_to)
 
             logger.user(user_message)
 

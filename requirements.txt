@@ -7,3 +7,5 @@ requests
 pytesseract
 Pillow
 pypdf
+huggingface_hub
+replicate

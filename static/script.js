@@ -499,6 +499,24 @@ function addImageMessage(imageBase64, promptUsed) {
   return wrapper;
 }
 
+function addVideoMessage(videoUrl) {
+  removeEmptyState();
+  const wrapper = document.createElement('div');
+  wrapper.className = 'msg msg--assistant msg--video';
+
+  const video = document.createElement('video');
+  video.src = videoUrl;
+  video.controls = true;
+  video.autoplay = false;
+  video.loop = true;
+  video.className = 'msg__video';
+
+  wrapper.appendChild(video);
+  chatMessagesEl.appendChild(wrapWithAvatar(wrapper, 'assistant', 'msg-row--image'));
+  scrollToBottom();
+  return wrapper;
+}
+
 function addPdfMessage(pdfFilename, downloadUrl, pages) {
   removeEmptyState();
   const div = document.createElement('div');
@@ -678,7 +696,7 @@ async function sendMessage(message, images, replyTo) {
           if (nodeKey) markNodeDone(nodeKey);
           progressEl.textContent = payload.label;
           scrollToBottom();
-        } else if (payload.type === 'image_progress' || payload.type === 'attachment_progress') {
+        } else if (payload.type === 'image_progress' || payload.type === 'video_progress' || payload.type === 'attachment_progress') {
           progressEl.textContent = payload.label;
           scrollToBottom();
         } else if (payload.type === 'attachment_done') {
@@ -708,6 +726,18 @@ async function sendMessage(message, images, replyTo) {
           currentConversation.push({
             role: "assistant",
             text: "[Imagem Gerada]"
+          });
+        } else if (payload.type === 'video') {
+          sessionId = payload.session_id;
+          localStorage.setItem('crew_session_id', sessionId);
+
+          progressEl.remove();
+
+          addVideoMessage(payload.video_url);
+
+          currentConversation.push({
+            role: "assistant",
+            text: "[Vídeo gerado]"
           });
         } else if (payload.type === 'error') {
           progressEl.remove();
