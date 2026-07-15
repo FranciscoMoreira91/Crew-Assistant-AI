@@ -26,9 +26,9 @@ from flask import Flask, request, jsonify, render_template, Response, stream_wit
 from flask_cors import CORS
 
 from crew_agents import run_crew
-from ocr_tool import images_to_searchable_pdf, PDF_DIR
-from image_tool import ImageTool, IMAGENS_DIR
-from video_tool import VideoTool, VIDEOS_DIR
+from tools.ocr_tool import images_to_searchable_pdf, PDF_DIR
+from tools.image_tool import ImageTool, IMAGENS_DIR
+from tools.video_tool import VideoTool, VIDEOS_DIR
 
 image_tool = ImageTool()
 video_tool = VideoTool()

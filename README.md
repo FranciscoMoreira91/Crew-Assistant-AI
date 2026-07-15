@@ -259,7 +259,7 @@ software à parte):
   TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
   ```
 
-Os ficheiros relevantes são `ocr_tool.py` (OCR + criação do PDF) e as
+Os ficheiros relevantes são `tools/ocr_tool.py` (OCR + criação do PDF) e as
 mesmas rotas de `app.py` usadas para o chat.
 
 ## Ler emails (Gmail / Outlook)
@@ -343,7 +343,7 @@ isto com login simples.
 
 No chat, pedidos com palavras como "gera um vídeo", "cria um vídeo" ou
 "vídeo de" ativam a geração de vídeo — pelo mesmo princípio da imagem (ver
-acima), a `VideoTool` (`video_tool.py`) é chamada **diretamente** pelo
+acima), a `VideoTool` (`tools/video_tool.py`) é chamada **diretamente** pelo
 `app.py`, nunca através de um Agent do CrewAI (um vídeo é ainda maior que
 uma imagem em base64, por isso faz ainda menos sentido tentar fazê-lo
 "passar" pela resposta de um LLM).
@@ -377,7 +377,7 @@ imagem" ou "imagem de" ativam a geração de imagens.
 final.** Uma imagem em base64 tem tipicamente dezenas ou centenas de
 milhares de caracteres — longa demais para um LLM (sobretudo modelos locais)
 conseguir reproduzir sem truncar ou corromper, o que resultava em imagens
-partidas. Por isso o `app.py` chama a `ImageTool` (`image_tool.py`)
+partidas. Por isso o `app.py` chama a `ImageTool` (`tools/image_tool.py`)
 **diretamente**:
 
 1. O LLM configurado (`MODEL_NAME`) é usado só para refinar o pedido do
@@ -408,7 +408,7 @@ comuns:
   reset mensal, comprar créditos pré-pagos, ou assinar o plano PRO (20x
   mais quota incluída). Ver https://huggingface.co/settings/billing.
 
-Os ficheiros relevantes são `image_tool.py` (refinamento do prompt +
+Os ficheiros relevantes são `tools/image_tool.py` (refinamento do prompt +
 chamada à API da Hugging Face + gravação em disco) e as rotas em `app.py`.
 
 ## Personalizar
