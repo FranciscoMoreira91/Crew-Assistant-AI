@@ -20,9 +20,11 @@ import os
 import queue
 import threading
 import uuid
+import traceback
 
 from logger import CrewLogger
 from datetime import datetime
+from dotenv import load_dotenv, set_key
 
 from flask import Flask, request, jsonify, render_template, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
@@ -32,6 +34,9 @@ from tools.ocr_tool import images_to_searchable_pdf, PDF_DIR
 from tools.image_tool import ImageTool, IMAGENS_DIR
 from tools.video_tool import VideoTool, VIDEOS_DIR
 from tools.attachment_tool import extract_attachment_text
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 image_tool = ImageTool()
 video_tool = VideoTool()
@@ -70,6 +75,36 @@ VIDEO_KEYWORDS = (
     "faz um vídeo", "faz um video", "vídeo de", "video de", "animação de",
     "generate a video", "create a video", "make a video", "video of",
 )
+
+CONFIG_KEYS = {
+    "LLM_PROVIDER",
+    "MODEL_NAME",
+
+    "IMAGE_PROVIDER",
+    "IMAGE_MODEL",
+
+    "VIDEO_PROVIDER",
+    "VIDEO_MODEL",
+
+    "OCR_ENABLED",
+    "OCR_LANGUAGE",
+
+    "EMAIL_HOST",
+    "EMAIL_PORT",
+    "EMAIL_USERNAME",
+    "EMAIL_PASSWORD",
+
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
+
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "HF_TOKEN",
+    "FAL_KEY",
+    "REPLICATE_API_TOKEN",
+}
 
 MAX_OCR_CONTEXT_CHARS = 4000
 
@@ -213,6 +248,133 @@ def download_imagem(filename):
 def download_video(filename):
     return send_from_directory(VIDEOS_DIR, filename, as_attachment=False)
 
+@app.route("/api/config/model", methods=["POST"])
+def update_model():
+    data = request.get_json(force=True)
+    new_model = data.get("model_name")
+    
+    if not new_model:
+        return jsonify({"error": "Nome do modelo não fornecido"}), 400
+    
+    # 1. Atualiza a variável no ambiente do processo atual
+    os.environ["MODEL_NAME"] = new_model
+    
+    # 2. Persiste a alteração no ficheiro .env
+    # (Reescrevemos o .env para garantir que a mudança sobreviva a restarts)
+    try:
+        from dotenv import set_key
+        set_key(".env", "MODEL_NAME", new_model)
+    except ImportError:
+        # Fallback se não tiveres a função set_key (ou se preferires manualmente)
+        with open(".env", "r") as f:
+            lines = f.readlines()
+        with open(".env", "w") as f:
+            found = False
+            for line in lines:
+                if line.startswith("MODEL_NAME="):
+                    f.write(f"MODEL_NAME={new_model}\n")
+                    found = True
+                else:
+                    f.write(line)
+            if not found:
+                f.write(f"MODEL_NAME={new_model}\n")
+                
+    return jsonify({"message": f"Modelo alterado com sucesso para: {new_model}"})
+
+@app.route("/update-config", methods=["POST"])
+def update_config():
+
+    try:
+
+        data = request.get_json(force=True)
+
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "Nenhum dado recebido."
+            }), 400
+
+        # Validação simples
+        if "EMAIL_PORT" in data:
+            int(data["EMAIL_PORT"])
+
+        if "SMTP_PORT" in data:
+            int(data["SMTP_PORT"])
+
+        # Guarda todas as configurações
+        for key, value in data.items():
+
+            if key not in CONFIG_KEYS:
+                continue
+
+            if value is None:
+                value = ""
+
+            value = str(value)
+
+            os.environ[key] = value
+
+            set_key(
+                ENV_FILE,
+                key,
+                value
+            )
+
+        # Recarrega o .env
+        load_dotenv(
+            dotenv_path=ENV_FILE,
+            override=True
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": "Configurações guardadas com sucesso."
+        })
+
+    except Exception as e:
+
+        traceback.print_exc()
+
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+    
+    
+@app.route("/api/config", methods=["GET"])
+def get_config():
+
+    return jsonify({
+
+        "LLM_PROVIDER": os.getenv("LLM_PROVIDER", ""),
+        "MODEL_NAME": os.getenv("MODEL_NAME", ""),
+
+        "IMAGE_PROVIDER": os.getenv("IMAGE_PROVIDER", ""),
+        "IMAGE_MODEL": os.getenv("IMAGE_MODEL", ""),
+
+        "VIDEO_PROVIDER": os.getenv("VIDEO_PROVIDER", ""),
+        "VIDEO_MODEL": os.getenv("VIDEO_MODEL", ""),
+
+        "OCR_ENABLED": os.getenv("OCR_ENABLED", ""),
+        "OCR_LANGUAGE": os.getenv("OCR_LANGUAGE", ""),
+
+        "EMAIL_HOST": os.getenv("EMAIL_HOST", ""),
+        "EMAIL_PORT": os.getenv("EMAIL_PORT", ""),
+        "EMAIL_USERNAME": os.getenv("EMAIL_USERNAME", ""),
+        "EMAIL_PASSWORD": os.getenv("EMAIL_PASSWORD", ""),
+
+        "SMTP_HOST": os.getenv("SMTP_HOST", ""),
+        "SMTP_PORT": os.getenv("SMTP_PORT", ""),
+        "SMTP_USERNAME": os.getenv("SMTP_USERNAME", ""),
+        "SMTP_PASSWORD": os.getenv("SMTP_PASSWORD", ""),
+
+        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+        "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+        "HF_TOKEN": os.getenv("HF_TOKEN", ""),
+        "FAL_KEY": os.getenv("FAL_KEY", ""),
+        "REPLICATE_API_TOKEN": os.getenv("REPLICATE_API_TOKEN", "")
+
+    })
 
 @app.route("/api/chat", methods=["POST"])
 def chat():

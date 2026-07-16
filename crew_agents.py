@@ -37,7 +37,7 @@ from pathlib import Path
 
 load_dotenv()
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+#MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 # Se estiver definida ANTHROPIC_API_KEY, o litellm (usado internamente pelo
 # CrewAI) trata do roteamento automaticamente a partir do nome do modelo,
@@ -45,6 +45,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 
 def build_agents():
+    current_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
     coordenador = Agent(
         role="Coordenador de Atendimento",
         goal=(
@@ -60,7 +61,7 @@ def build_agents():
         ),
         allow_delegation=False,
         verbose=True,
-        llm=MODEL_NAME,
+        llm=current_model,
     )
 
     pesquisador = Agent(
@@ -76,7 +77,7 @@ def build_agents():
         ),
         allow_delegation=False,
         verbose=True,
-        llm=MODEL_NAME,
+        llm=current_model,
     )
 
     especialista = Agent(
@@ -92,7 +93,7 @@ def build_agents():
         ),
         allow_delegation=False,
         verbose=True,
-        llm=MODEL_NAME,
+        llm=current_model,
     )
 
     email_agent = Agent(
@@ -106,7 +107,7 @@ def build_agents():
         backstory="Especialista em Outlook, Gmail e IMAP.",
         tools=[EmailTool()],
         verbose=True,
-        llm=MODEL_NAME,
+        llm=current_model,
     )
 
     redator = Agent(
@@ -123,7 +124,7 @@ def build_agents():
         ),
         allow_delegation=False,
         verbose=True,
-        llm=MODEL_NAME,
+        llm=current_model,
     )
 
     return coordenador, pesquisador, especialista, email_agent, redator

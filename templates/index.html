@@ -89,6 +89,13 @@
                 <span id="themeIcon">🌙</span>
               </button>
 
+              <button id="settingsToggle" class="theme-toggle"
+                onclick="document.getElementById('settings-overlay').classList.add('show')">
+
+                <span>⚙️</span>
+
+              </button>
+
             </div>
           </div>
 
@@ -162,6 +169,279 @@
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+  <!-- Overlay -->
+  <div id="settings-overlay" class="settings-overlay">
+
+    <div id="settings-panel" class="settings-panel">
+
+      <div class="settings-header">
+
+        <div class="settings-title">
+
+          <div class="settings-icon">⚙️</div>
+
+          <div>
+
+            <h2>Definições</h2>
+            <p>Personalize o funcionamento da aplicação</p>
+
+          </div>
+
+        </div>
+
+        <button class="settings-close" onclick="document.getElementById('settings-overlay').classList.remove('show')">
+
+          ✕
+
+        </button>
+
+      </div>
+
+      <div class="settings-body">
+
+        <!-- Menu lateral -->
+        <aside class="settings-sidebar">
+
+          <button class="settings-tab-btn active" data-tab="general">
+            ⚙ Geral
+          </button>
+
+<!--           <button class="settings-tab-btn" data-tab="ai">
+            🤖 IA
+          </button> -->
+
+          <button class="settings-tab-btn" data-tab="image">
+            🖼 Imagem
+          </button>
+
+          <button class="settings-tab-btn" data-tab="video">
+            🎥 Vídeo
+          </button>
+
+          <button class="settings-tab-btn" data-tab="ocr">
+            🔍 OCR
+          </button>
+
+          <button class="settings-tab-btn" data-tab="email">
+            📧 Email
+          </button>
+
+        </aside>
+
+        <!-- Conteúdo -->
+        <div class="settings-content">
+
+          <!-- Geral -->
+          <div class="settings-tab active" id="tab-general">
+
+            <h3>🤖 Inteligência Artificial</h3>
+
+<!--             <div class="setting-group">
+
+              <label>Provider</label>
+
+              <select id="llm_provider">
+
+                <option value="openai">OpenAI</option>
+                <option value="ollama">Ollama</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="huggingface">HuggingFace</option>
+
+              </select>
+
+            </div> -->
+
+            <div class="setting-group">
+
+              <label>Modelo LLM</label>
+
+              <input id="model_name" type="text" placeholder="ollama/qwen2.5">
+
+            </div>
+
+          </div>
+
+          <!-- IA -->
+<!--           <div class="settings-tab" id="tab-ai">
+
+            
+
+          </div> -->
+
+          <!-- Imagem -->
+          <div class="settings-tab" id="tab-image">
+
+            <h3>🖼 Geração de Imagens</h3>
+
+            <p class="settings-description">
+              Introduza o token da sua conta Hugging Face para permitir a geração de imagens.
+            </p>
+
+            <div class="setting-group">
+
+              <label>Hugging Face Token</label>
+
+              <input id="hf_token" type="password" placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+
+              <small class="settings-description">
+                O token é utilizado para autenticar os pedidos à API da Hugging Face.
+              </small>
+
+            </div>
+
+          </div>
+
+          <!-- Vídeo -->
+          <div class="settings-tab" id="tab-video">
+
+            <h3>🎥 Geração de Vídeo</h3>
+
+            <div class="setting-group">
+
+              <label>Provider</label>
+
+              <select id="video_provider">
+
+                <option>ltx</option>
+                <option>replicate</option>
+                <option>huggingface</option>
+
+              </select>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Modelo</label>
+
+              <input id="video_model" type="text">
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Replicate API Token</label>
+
+              <input id="replicate_api_token" type="password" placeholder="r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+
+              <small class="settings-description">
+                Necessário para gerar vídeos via Replicate (minimax/video-01). Gera um token em
+                replicate.com/account/api-tokens.
+              </small>
+
+            </div>
+
+          </div>
+
+          <!-- OCR -->
+          <div class="settings-tab" id="tab-ocr">
+
+            <h3>🔍 OCR</h3>
+
+            <div class="setting-group">
+
+              <label>Ativar OCR</label>
+
+              <select id="ocr_enabled">
+
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+
+              </select>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Idioma</label>
+
+              <select id="ocr_language">
+
+                <option value="por">Português</option>
+                <option value="eng">Inglês</option>
+                <option value="spa">Espanhol</option>
+                <option value="fra">Francês</option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+          <!-- Email -->
+          <div class="settings-tab" id="tab-email">
+
+            <h3>📧 IMAP</h3>
+
+            <div class="setting-grid">
+
+              <div class="setting-group">
+
+                <label>Servidor</label>
+
+                <input id="email_host" type="text">
+
+              </div>
+
+              <div class="setting-group">
+
+                <label>Porta</label>
+
+                <input id="email_port" type="number">
+
+              </div>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Utilizador</label>
+
+              <input id="email_user" type="email">
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Password</label>
+
+              <input id="email_password" type="password" placeholder="Password de aplicação (App Password)">
+
+              <small class="settings-description">
+                Com verificação em 2 passos ativa, usa uma "password de aplicação" própria do Gmail/Outlook, não a
+                password normal da conta.
+              </small>
+
+            </div>
+
+            <hr>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="settings-footer">
+
+        <button class="btn-secondary" onclick="document.getElementById('settings-overlay').classList.remove('show')">
+
+          Cancelar
+
+        </button>
+
+        <button class="btn-primary" onclick="saveSettings()">
+
+          💾 Guardar Alterações
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
 </body>
 
 </html>
