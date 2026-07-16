@@ -28,7 +28,7 @@ IMAGE_MODEL = os.getenv(
 # consulta a página do modelo em huggingface.co, botão "Use this model").
 IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "hf-inference")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raiz do projeto (um nível acima de tools/)
 IMAGENS_DIR = os.path.join(BASE_DIR, "imagens")
 os.makedirs(IMAGENS_DIR, exist_ok=True)
 

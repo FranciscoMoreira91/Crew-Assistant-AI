@@ -34,7 +34,12 @@ let conversations =
 
 let currentConversation = [];
 let sessionId = localStorage.getItem('crew_session_id') || null;
-let pendingAttachments = []; // { name, dataUrl }
+let pendingAttachments = []; // { name, dataUrl, mime }
+
+function fileExtension(name) {
+  const parts = (name || '').split('.');
+  return parts.length > 1 ? parts.pop().toUpperCase().slice(0, 4) : '';
+}
 let replyingTo = null; // texto da mensagem do assistente a que se está a responder
 
 let translations = {};
@@ -449,20 +454,28 @@ function addMessage(text, role) {
   return div;
 }
 
-function addUserMessageWithAttachments(text, images, quotedText) {
+function addUserMessageWithAttachments(text, attachments, quotedText) {
   removeEmptyState();
   const div = document.createElement('div');
   div.className = 'msg msg--user';
 
   if (quotedText) addQuoteToMessage(div, quotedText);
 
-  if (images && images.length) {
+  if (attachments && attachments.length) {
     const grid = document.createElement('div');
     grid.className = 'msg__attachments';
-    images.forEach((src) => {
-      const img = document.createElement('img');
-      img.src = src;
-      grid.appendChild(img);
+    attachments.forEach((att) => {
+      const isImage = (att.mime || '').startsWith('image/');
+      if (isImage) {
+        const img = document.createElement('img');
+        img.src = att.dataUrl;
+        grid.appendChild(img);
+      } else {
+        const chip = document.createElement('span');
+        chip.className = 'msg__file-chip';
+        chip.textContent = `📎 ${att.name}`;
+        grid.appendChild(chip);
+      }
     });
     div.appendChild(grid);
   }
@@ -601,11 +614,27 @@ function renderAttachmentsPreview() {
 
   pendingAttachments.forEach((att, idx) => {
     const thumb = document.createElement('div');
-    thumb.className = 'attachment-thumb';
+    const isImage = (att.mime || '').startsWith('image/');
+    thumb.className = isImage ? 'attachment-thumb' : 'attachment-thumb attachment-thumb--file';
+    thumb.title = att.name;
 
-    const img = document.createElement('img');
-    img.src = att.dataUrl;
-    img.alt = att.name;
+    if (isImage) {
+      const img = document.createElement('img');
+      img.src = att.dataUrl;
+      img.alt = att.name;
+      thumb.appendChild(img);
+    } else {
+      const icon = document.createElement('span');
+      icon.className = 'attachment-thumb__ext';
+      icon.textContent = fileExtension(att.name) || '📄';
+
+      const name = document.createElement('span');
+      name.className = 'attachment-thumb__name';
+      name.textContent = att.name;
+
+      thumb.appendChild(icon);
+      thumb.appendChild(name);
+    }
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -617,7 +646,6 @@ function renderAttachmentsPreview() {
       renderAttachmentsPreview();
     });
 
-    thumb.appendChild(img);
     thumb.appendChild(removeBtn);
     attachmentsPreviewEl.appendChild(thumb);
   });
@@ -628,10 +656,9 @@ attachBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async (e) => {
   const files = Array.from(e.target.files || []);
   for (const file of files) {
-    if (!file.type.startsWith('image/')) continue;
     try {
       const dataUrl = await readFileAsDataURL(file);
-      pendingAttachments.push({ name: file.name, dataUrl });
+      pendingAttachments.push({ name: file.name, dataUrl, mime: file.type || '' });
     } catch (err) {
       console.error('Erro a ler ficheiro', err);
     }
@@ -642,11 +669,11 @@ fileInput.addEventListener('change', async (e) => {
 
 /* ---------------- Envio de mensagens ---------------- */
 
-async function sendMessage(message, images, replyTo) {
-  addUserMessageWithAttachments(message, images, replyTo);
+async function sendMessage(message, attachments, replyTo) {
+  addUserMessageWithAttachments(message, attachments, replyTo);
   currentConversation.push({
     role: "user",
-    text: message || "[Imagem]"
+    text: message || "[Anexo]"
   });
   resetRelay();
   // O primeiro nó só acende quando soubermos (pela 1ª mensagem do servidor)
@@ -656,14 +683,14 @@ async function sendMessage(message, images, replyTo) {
   inputEl.disabled = true;
 
   const progressEl = addProgressMessage(
-    images.length ? '📎 A preparar os anexos...' : '🧭 Coordenador a analisar o pedido...'
+    attachments.length ? '📎 A preparar os anexos...' : '🧭 Coordenador a analisar o pedido...'
   );
 
   try {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, language: currentLanguage, images, session_id: sessionId, reply_to: replyTo || null }),
+      body: JSON.stringify({ message, language: currentLanguage, attachments, session_id: sessionId, reply_to: replyTo || null }),
     });
 
     const reader = response.body.getReader();
@@ -758,9 +785,9 @@ async function sendMessage(message, images, replyTo) {
 composerEl.addEventListener('submit', (e) => {
   e.preventDefault();
   const message = inputEl.value.trim();
-  const images = pendingAttachments.map((a) => a.dataUrl);
+  const attachments = pendingAttachments.map((a) => ({ name: a.name, dataUrl: a.dataUrl, mime: a.mime }));
 
-  if (!message && images.length === 0) return;
+  if (!message && attachments.length === 0) return;
 
   const replyTo = replyingTo;
 
@@ -769,7 +796,7 @@ composerEl.addEventListener('submit', (e) => {
   renderAttachmentsPreview();
   clearReplyTarget();
 
-  sendMessage(message, images, replyTo);
+  sendMessage(message, attachments, replyTo);
   renderHistory();
 });
 
