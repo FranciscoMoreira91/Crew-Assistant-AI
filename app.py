@@ -8,7 +8,9 @@ Endpoints:
   GET  /                    -> serve a página do chat
   POST /api/chat             -> resposta simples (sem progresso em tempo real)
   POST /api/chat/stream      -> resposta com progresso em tempo real (SSE):
-                                 texto, geração de imagem, ou anexos (OCR + PDF)
+                                 texto, geração de imagem, ou anexos
+                                 (imagens -> OCR + PDF; outros ficheiros ->
+                                 extração de texto via tools/attachment_tool.py)
   GET  /pdf-files/<filename> -> download dos PDFs gerados a partir de anexos
 """
 
@@ -29,6 +31,7 @@ from crew_agents import run_crew
 from tools.ocr_tool import images_to_searchable_pdf, PDF_DIR
 from tools.image_tool import ImageTool, IMAGENS_DIR
 from tools.video_tool import VideoTool, VIDEOS_DIR
+from tools.attachment_tool import extract_attachment_text
 
 image_tool = ImageTool()
 video_tool = VideoTool()
@@ -50,8 +53,8 @@ AGENT_LABELS = {
 }
 
 EMAIL_KEYWORDS = (
-    "email", "emails", "gmail", "outlook",
-    "fatura", "invoice", "anexo", "recibo",
+    "email", "emails", "e-mail", "e-mails", "gmail", "outlook",
+    "caixa de correio", "inbox", "mensagens não lidas",
 )
 
 IMAGE_KEYWORDS = (
@@ -124,10 +127,71 @@ def save_message(session_id: str, role: str, content: str):
 
 def decode_data_url(data_url: str) -> bytes:
     """Aceita tanto uma data URL completa ('data:image/png;base64,...') como
-    apenas a string base64 pura, e devolve sempre os bytes da imagem."""
+    apenas a string base64 pura, e devolve sempre os bytes do ficheiro."""
     if "," in data_url and data_url.strip().startswith("data:"):
         data_url = data_url.split(",", 1)[1]
     return base64.b64decode(data_url)
+
+
+def split_attachments(attachments_in):
+    """
+    Separa os anexos recebidos do frontend em imagens (processadas por OCR
+    -> PDF pesquisável) e outros ficheiros (documentos, folhas de cálculo,
+    apresentações, código, comprimidos, áudio, vídeo, etc.).
+
+    Aceita tanto o formato antigo (string com a data URL, só imagens) como
+    o formato atual {name, dataUrl, mime} enviado desde a v2.0.0.
+
+    Devolve (lista de data URLs de imagem, lista de ficheiros não-imagem
+    como {"name", "mime", "raw"}).
+    """
+    image_urls = []
+    other_files = []
+    for item in attachments_in:
+        if isinstance(item, str):
+            # formato antigo: sempre tratado como imagem
+            image_urls.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+
+        name = item.get("name") or "ficheiro"
+        mime = (item.get("mime") or "").lower()
+        data_url = item.get("dataUrl") or ""
+
+        if mime.startswith("image/") or data_url.startswith("data:image/"):
+            image_urls.append(data_url)
+        else:
+            try:
+                raw = decode_data_url(data_url)
+            except Exception:  # noqa: BLE001
+                raw = b""
+            other_files.append({"name": name, "mime": mime, "raw": raw})
+
+    return image_urls, other_files
+
+
+def build_other_files_context(other_files: list) -> str:
+    """Extrai o conteúdo possível de cada ficheiro não-imagem anexado e
+    devolve um bloco de texto pronto a juntar ao contexto do LLM, para que
+    este consiga responder a perguntas sobre qualquer tipo de ficheiro."""
+    if not other_files:
+        return ""
+
+    blocos = []
+    for f in other_files:
+        texto = extract_attachment_text(f["name"], f["mime"], f["raw"])
+        if texto:
+            blocos.append(f"[Ficheiro anexado: {f['name']}]\n{texto}")
+        else:
+            blocos.append(
+                f"[Ficheiro anexado: {f['name']} — conteúdo não pôde ser "
+                f"lido automaticamente (tipo não suportado nesta versão, "
+                f"ex.: áudio/vídeo/binário). Está disponível apenas o nome "
+                f"do ficheiro.]"
+            )
+
+    return "\n\n[Ficheiros anexados pelo utilizador]:\n" + "\n\n".join(blocos)
 
 
 @app.route("/")
@@ -154,24 +218,27 @@ def download_video(filename):
 def chat():
     data = request.get_json(force=True) or {}
     user_message = (data.get("message") or "").strip()
-    images_in = data.get("images") or []
+    attachments_in = data.get("attachments") or data.get("images") or []
     session_id = data.get("session_id") or str(uuid.uuid4())
     reply_to = (data.get("reply_to") or "").strip()
 
-    if not user_message and not images_in:
+    image_urls, other_files = split_attachments(attachments_in)
+
+    if not user_message and not image_urls and not other_files:
         return jsonify({"error": "Mensagem vazia."}), 400
 
     if user_message:
         save_message(session_id, "user", user_message)
-    if images_in:
-        save_message(session_id, "user", f"[{len(images_in)} imagem(ns) anexada(s)]")
+    if image_urls or other_files:
+        total = len(image_urls) + len(other_files)
+        save_message(session_id, "user", f"[{total} anexo(s) enviado(s)]")
 
     extra_context = ""
     attachment_info = None
 
-    if images_in:
+    if image_urls:
         try:
-            raw_images = [decode_data_url(b) for b in images_in]
+            raw_images = [decode_data_url(b) for b in image_urls]
             resultado = images_to_searchable_pdf(raw_images)
             attachment_info = {
                 "pdf_filename": resultado["pdf_filename"],
@@ -186,13 +253,23 @@ def chat():
         except Exception as exc:  # noqa: BLE001
             return jsonify({"error": f"Não consegui processar os anexos: {exc}"}), 502
 
-        if not user_message:
-            return jsonify({
-                "session_id": session_id,
-                "type": "attachment",
-                "attachment": attachment_info,
-                "reply": f"PDF criado com {attachment_info['pages']} página(s).",
-            })
+    if other_files:
+        extra_context += build_other_files_context(other_files)
+
+    if (image_urls or other_files) and not user_message:
+        resumo_partes = []
+        if attachment_info:
+            resumo_partes.append(f"PDF criado com {attachment_info['pages']} página(s).")
+        if other_files:
+            resumo_partes.append(
+                f"{len(other_files)} outro(s) ficheiro(s) recebido(s) e analisado(s)."
+            )
+        return jsonify({
+            "session_id": session_id,
+            "type": "attachment",
+            "attachment": attachment_info,
+            "reply": " ".join(resumo_partes),
+        })
 
     history_text = get_history_text(session_id) + extra_context + build_reply_context(reply_to)
 
@@ -232,7 +309,9 @@ def chat():
         return jsonify(payload)
 
     resposta = run_crew(
-        user_message, history_text, include_email=is_email_request(user_message)
+        user_message,
+        history_text,
+        include_email=is_email_request(user_message) and not (image_urls or other_files),
     )
     save_message(session_id, "assistant", resposta)
 
@@ -246,18 +325,21 @@ def chat():
 def chat_stream():
     data = request.get_json(force=True) or {}
     user_message = (data.get("message") or "").strip()
-    images_in = data.get("images") or []
+    attachments_in = data.get("attachments") or data.get("images") or []
     session_id = data.get("session_id") or str(uuid.uuid4())
     language = data.get("language", "pt")
     reply_to = (data.get("reply_to") or "").strip()
 
-    if not user_message and not images_in:
+    image_urls, other_files = split_attachments(attachments_in)
+
+    if not user_message and not image_urls and not other_files:
         return jsonify({"error": "Mensagem vazia."}), 400
 
     if user_message:
         save_message(session_id, "user", user_message)
-    if images_in:
-        save_message(session_id, "user", f"[{len(images_in)} imagem(ns) anexada(s)]")
+    if image_urls or other_files:
+        total = len(image_urls) + len(other_files)
+        save_message(session_id, "user", f"[{total} anexo(s) enviado(s)]")
 
     q: "queue.Queue" = queue.Queue()
 
@@ -274,10 +356,10 @@ def chat_stream():
         try:
             extra_context = ""
 
-            # 1) Anexos: OCR + PDF pesquisável guardado em PDF/
-            if images_in:
+            # 1) Anexos: imagens -> OCR + PDF pesquisável guardado em PDF/
+            if image_urls:
                 q.put({"type": "attachment_progress", "label": "📎 A processar imagens e a fazer OCR..."})
-                raw_images = [decode_data_url(b) for b in images_in]
+                raw_images = [decode_data_url(b) for b in image_urls]
                 resultado = images_to_searchable_pdf(raw_images)
 
                 q.put({
@@ -293,14 +375,21 @@ def chat_stream():
                         f"{resultado['extracted_text'][:MAX_OCR_CONTEXT_CHARS]}"
                     )
 
-                # Só havia imagens, sem mensagem de texto -> terminar aqui.
-                if not user_message:
-                    q.put({
-                        "type": "final",
-                        "reply": f"PDF criado com {len(raw_images)} página(s) a partir das imagens anexadas.",
-                        "session_id": session_id,
-                    })
-                    return
+            # 2) Outros ficheiros anexados (documentos, folhas de cálculo,
+            #    apresentações, código-fonte, comprimidos, áudio, vídeo...):
+            #    extrai o conteúdo possível para dar contexto ao LLM.
+            if other_files:
+                q.put({"type": "attachment_progress", "label": "📎 A analisar os ficheiros anexados..."})
+                extra_context += build_other_files_context(other_files)
+
+            if (image_urls or other_files) and not user_message:
+                total = len(image_urls) + len(other_files)
+                q.put({
+                    "type": "final",
+                    "reply": f"{total} anexo(s) recebido(s) e analisado(s).",
+                    "session_id": session_id,
+                })
+                return
 
             # 3) Pedido de vídeo -> VideoTool chamada diretamente (mesmo
             #    motivo da imagem: um vídeo é maior ainda, não pode passar
@@ -351,7 +440,7 @@ def chat_stream():
                 language=language,
                 logger=logger,
                 task_callback=task_callback,
-                include_email=is_email_request(user_message),
+                include_email=is_email_request(user_message) and not (image_urls or other_files),
             )
             save_message(session_id, "assistant", resposta)
             q.put({"type": "final", "reply": resposta, "session_id": session_id})

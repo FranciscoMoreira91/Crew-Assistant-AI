@@ -176,6 +176,34 @@ body {
   gap: 18px;
 }
 
+.header__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sidebar__brand {
+  flex-shrink: 0;
+  padding-top: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.logo {
+
+  width: 56px;
+
+  height: 56px;
+
+  object-fit: contain;
+
+  border-radius: 12px;
+
+  flex-shrink: 0;
+
+}
 
 .theme-toggle {
   width: 46px;
@@ -741,6 +769,49 @@ body {
   display: block;
 }
 
+.attachment-thumb--file {
+  width: auto;
+  min-width: 56px;
+  max-width: 160px;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: var(--panel-alt);
+}
+
+.attachment-thumb__ext {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--accent-active);
+}
+
+.attachment-thumb__name {
+  font-size: 10px;
+  color: var(--text-muted);
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg__file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text);
+}
+
 .attachment-thumb__remove {
   position: absolute;
   top: 2px;
@@ -950,6 +1021,7 @@ body {
   .header__title h1 {
     font-size: 22px;
   }
+
 }
 
 /* ==========================
@@ -993,5 +1065,4 @@ body {
     .floating-logo img {
         width: 55px;
     }
-
 }

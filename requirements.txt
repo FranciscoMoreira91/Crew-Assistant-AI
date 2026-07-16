@@ -9,3 +9,6 @@ Pillow
 pypdf
 huggingface_hub
 replicate
+openpyxl
+python-docx
+python-pptx

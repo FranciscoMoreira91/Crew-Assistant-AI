@@ -17,7 +17,7 @@ import pytesseract
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raiz do projeto (um nível acima de tools/)
 PDF_DIR = os.path.join(BASE_DIR, "PDF")
 os.makedirs(PDF_DIR, exist_ok=True)
 
