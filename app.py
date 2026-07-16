@@ -346,31 +346,33 @@ def get_config():
 
     return jsonify({
 
+        "LLM_PROVIDER": os.getenv("LLM_PROVIDER", ""),
         "MODEL_NAME": os.getenv("MODEL_NAME", ""),
 
-        "EMAIL_USERNAME": os.getenv("EMAIL_USERNAME", ""),
-
-        "LLM_PROVIDER": os.getenv("LLM_PROVIDER", ""),
-
         "IMAGE_PROVIDER": os.getenv("IMAGE_PROVIDER", ""),
-
         "IMAGE_MODEL": os.getenv("IMAGE_MODEL", ""),
 
         "VIDEO_PROVIDER": os.getenv("VIDEO_PROVIDER", ""),
-
         "VIDEO_MODEL": os.getenv("VIDEO_MODEL", ""),
 
         "OCR_ENABLED": os.getenv("OCR_ENABLED", ""),
-
         "OCR_LANGUAGE": os.getenv("OCR_LANGUAGE", ""),
 
         "EMAIL_HOST": os.getenv("EMAIL_HOST", ""),
-
         "EMAIL_PORT": os.getenv("EMAIL_PORT", ""),
+        "EMAIL_USERNAME": os.getenv("EMAIL_USERNAME", ""),
+        "EMAIL_PASSWORD": os.getenv("EMAIL_PASSWORD", ""),
 
         "SMTP_HOST": os.getenv("SMTP_HOST", ""),
+        "SMTP_PORT": os.getenv("SMTP_PORT", ""),
+        "SMTP_USERNAME": os.getenv("SMTP_USERNAME", ""),
+        "SMTP_PASSWORD": os.getenv("SMTP_PASSWORD", ""),
 
-        "SMTP_PORT": os.getenv("SMTP_PORT", "")
+        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+        "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+        "HF_TOKEN": os.getenv("HF_TOKEN", ""),
+        "FAL_KEY": os.getenv("FAL_KEY", ""),
+        "REPLICATE_API_TOKEN": os.getenv("REPLICATE_API_TOKEN", "")
 
     })
 

@@ -200,29 +200,196 @@
 
       <div class="settings-body">
 
-        <div class="settings-section">
+        <!-- Menu lateral -->
+        <aside class="settings-sidebar">
 
-          <h3>🤖 Inteligência Artificial</h3>
+          <button class="settings-tab-btn active" data-tab="general">
+            ⚙ Geral
+          </button>
 
-          <div class="setting-group">
+<!--           <button class="settings-tab-btn" data-tab="ai">
+            🤖 IA
+          </button> -->
 
-            <label>Modelo LLM</label>
+          <button class="settings-tab-btn" data-tab="image">
+            🖼 Imagem
+          </button>
 
-            <input id="model_name" type="text" placeholder="ollama/qwen2.5">
+          <button class="settings-tab-btn" data-tab="video">
+            🎥 Vídeo
+          </button>
+
+          <button class="settings-tab-btn" data-tab="ocr">
+            🔍 OCR
+          </button>
+
+          <button class="settings-tab-btn" data-tab="email">
+            📧 Email
+          </button>
+
+        </aside>
+
+        <!-- Conteúdo -->
+        <div class="settings-content">
+
+          <!-- Geral -->
+          <div class="settings-tab active" id="tab-general">
+
+            <h3>🤖 Inteligência Artificial</h3>
+
+<!--             <div class="setting-group">
+
+              <label>Provider</label>
+
+              <select id="llm_provider">
+
+                <option value="openai">OpenAI</option>
+                <option value="ollama">Ollama</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="huggingface">HuggingFace</option>
+
+              </select>
+
+            </div> -->
+
+            <div class="setting-group">
+
+              <label>Modelo LLM</label>
+
+              <input id="model_name" type="text" placeholder="ollama/qwen2.5">
+
+            </div>
 
           </div>
 
-        </div>
+          <!-- IA -->
+<!--           <div class="settings-tab" id="tab-ai">
 
-        <div class="settings-section">
+            
 
-          <h3>📧 Email</h3>
+          </div> -->
 
-          <div class="setting-group">
+          <!-- Imagem -->
+          <div class="settings-tab" id="tab-image">
 
-            <label>Email (Utilizador)</label>
+            <h3>🖼 Geração de Imagens</h3>
 
-            <input id="email_user" type="email" placeholder="email@gmail.com">
+            <p class="settings-description">
+              Introduza o token da sua conta Hugging Face para permitir a geração de imagens.
+            </p>
+
+            <div class="setting-group">
+
+              <label>Hugging Face Token</label>
+
+              <input id="hf_token" type="password" placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+
+              <small class="settings-description">
+                O token é utilizado para autenticar os pedidos à API da Hugging Face.
+              </small>
+
+            </div>
+
+          </div>
+
+          <!-- Vídeo -->
+          <div class="settings-tab" id="tab-video">
+
+            <h3>🎥 Geração de Vídeo</h3>
+
+            <div class="setting-group">
+
+              <label>Provider</label>
+
+              <select id="video_provider">
+
+                <option>ltx</option>
+                <option>replicate</option>
+                <option>huggingface</option>
+
+              </select>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Modelo</label>
+
+              <input id="video_model" type="text">
+
+            </div>
+
+          </div>
+
+          <!-- OCR -->
+          <div class="settings-tab" id="tab-ocr">
+
+            <h3>🔍 OCR</h3>
+
+            <div class="setting-group">
+
+              <label>Ativar OCR</label>
+
+              <select id="ocr_enabled">
+
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+
+              </select>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Idioma</label>
+
+              <select id="ocr_language">
+
+                <option value="por">Português</option>
+                <option value="eng">English</option>
+                <option value="spa">Español</option>
+                <option value="fra">Français</option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+          <!-- Email -->
+          <div class="settings-tab" id="tab-email">
+
+            <h3>📧 IMAP</h3>
+
+            <div class="setting-grid">
+
+              <div class="setting-group">
+
+                <label>Servidor</label>
+
+                <input id="email_host" type="text">
+
+              </div>
+
+              <div class="setting-group">
+
+                <label>Porta</label>
+
+                <input id="email_port" type="number">
+
+              </div>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Utilizador</label>
+
+              <input id="email_user" type="email">
+
+            </div>
+
+            <hr>
 
           </div>
 

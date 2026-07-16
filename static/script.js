@@ -55,30 +55,91 @@ async function loadSettings() {
 
         const response = await fetch("/api/config");
 
-        if (!response.ok)
+        if (!response.ok) {
             throw new Error("Erro ao carregar configurações.");
+        }
 
         const config = await response.json();
 
-        const model = document.getElementById("model_name");
-        const email = document.getElementById("email_user");
+        // IA
+        if (document.getElementById("llm_provider"))
+            document.getElementById("llm_provider").value = config.LLM_PROVIDER || "";
 
-        if (model)
-            model.value = config.MODEL_NAME || config.model || "";
+        if (document.getElementById("model_name"))
+            document.getElementById("model_name").value = config.MODEL_NAME || "";
 
-        if (email)
-            email.value = config.EMAIL_USERNAME || config.email || "";
+        // Imagem
+        if (document.getElementById("image_provider"))
+            document.getElementById("image_provider").value = config.IMAGE_PROVIDER || "";
+
+        if (document.getElementById("image_model"))
+            document.getElementById("image_model").value = config.IMAGE_MODEL || "";
+
+        // Vídeo
+        if (document.getElementById("video_provider"))
+            document.getElementById("video_provider").value = config.VIDEO_PROVIDER || "";
+
+        if (document.getElementById("video_model"))
+            document.getElementById("video_model").value = config.VIDEO_MODEL || "";
+
+        // OCR
+        if (document.getElementById("ocr_enabled"))
+            document.getElementById("ocr_enabled").value = config.OCR_ENABLED || "true";
+
+        if (document.getElementById("ocr_language"))
+            document.getElementById("ocr_language").value = config.OCR_LANGUAGE || "por";
+
+        // IMAP
+        if (document.getElementById("email_host"))
+            document.getElementById("email_host").value = config.EMAIL_HOST || "";
+
+        if (document.getElementById("email_port"))
+            document.getElementById("email_port").value = config.EMAIL_PORT || "";
+
+        if (document.getElementById("email_user"))
+            document.getElementById("email_user").value = config.EMAIL_USERNAME || "";
+
+        if (document.getElementById("email_password"))
+            document.getElementById("email_password").value = config.EMAIL_PASSWORD || "";
+
+        // SMTP
+        if (document.getElementById("smtp_host"))
+            document.getElementById("smtp_host").value = config.SMTP_HOST || "";
+
+        if (document.getElementById("smtp_port"))
+            document.getElementById("smtp_port").value = config.SMTP_PORT || "";
+
+        if (document.getElementById("smtp_user"))
+            document.getElementById("smtp_user").value = config.SMTP_USERNAME || "";
+
+        if (document.getElementById("smtp_password"))
+            document.getElementById("smtp_password").value = config.SMTP_PASSWORD || "";
+
+        // API Keys
+        if (document.getElementById("openai_api_key"))
+            document.getElementById("openai_api_key").value = config.OPENAI_API_KEY || "";
+
+        if (document.getElementById("anthropic_api_key"))
+            document.getElementById("anthropic_api_key").value = config.ANTHROPIC_API_KEY || "";
+
+        if (document.getElementById("hf_token"))
+            document.getElementById("hf_token").value = config.HF_TOKEN || "";
+
+        if (document.getElementById("fal_key"))
+            document.getElementById("fal_key").value = config.FAL_KEY || "";
+
+        if (document.getElementById("replicate_api_token"))
+            document.getElementById("replicate_api_token").value = config.REPLICATE_API_TOKEN || "";
 
     }
     catch (err) {
 
-        console.error(err);
+        console.error("Erro ao carregar definições:", err);
         alert(err.message);
 
     }
 
 }
-
 
 
 async function saveSettings() {
@@ -879,6 +940,39 @@ composerEl.addEventListener('submit', (e) => {
 
   sendMessage(message, attachments, replyTo);
   renderHistory();
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    const buttons = document.querySelectorAll(".settings-tab-btn");
+    const tabs = document.querySelectorAll(".settings-tab");
+
+    buttons.forEach(button => {
+
+        button.addEventListener("click", () => {
+
+            // Remove ativo dos botões
+            buttons.forEach(b => b.classList.remove("active"));
+
+            // Esconde todas as tabs
+            tabs.forEach(tab => tab.classList.remove("active"));
+
+            // Ativa botão clicado
+            button.classList.add("active");
+
+            // Mostra a tab correspondente
+            const target = document.getElementById(
+                "tab-" + button.dataset.tab
+            );
+
+            if (target) {
+                target.classList.add("active");
+            }
+
+        });
+
+    });
+
 });
 
 loadLanguage(currentLanguage);
