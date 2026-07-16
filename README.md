@@ -6,8 +6,8 @@
 
 Projeto de exemplo com **vários agentes CrewAI** que colaboram entre si para
 responder a uma mensagem, ligados a um **chatbot em HTML/CSS/JS** com design
-próprio (tema escuro, com um "relay" visual que mostra qual agente está a
-trabalhar em tempo real).
+próprio (tema claro/escuro, com um "relay" visual que mostra qual agente está
+a trabalhar em tempo real).
 
 ## Como funciona a equipa de agentes
 
@@ -78,6 +78,23 @@ Imagem gerada, guardada em imagens/ e devolvida ao chat
 > melhorar o prompt de texto antes de gerar a imagem (isso sim, cabe bem
 > numa resposta de LLM).
 
+**Pedido de vídeo** (detetado por palavras-chave em `app.py`, ex: "gera um
+vídeo", "cria um vídeo", "vídeo de")
+
+```
+Utilizador
+     │
+     ▼
+app.py chama a VideoTool DIRETAMENTE (sem passar pelo CrewAI/LLM)
+     │
+     ▼
+Vídeo gerado via Replicate, guardado em videos/ e servido ao chat
+```
+
+> Pelo mesmo motivo da imagem — e ainda mais, já que um vídeo é maior — a
+> `VideoTool` também é chamada diretamente pelo `app.py`, nunca através de
+> um Agent do CrewAI.
+
 Cada agente recebe o output dos anteriores como contexto (`context=[...]`
 nas `Task` do CrewAI), pelo que o resultado final já incorpora o trabalho de
 toda a equipa.
@@ -127,11 +144,24 @@ IMAGE_MODEL=black-forest-labs/FLUX.1-schnell
 IMAGE_PROVIDER=hf-inference
 ```
 
+> ⚠️ **Atualização:** a Hugging Face deixou de servir o FLUX.1-schnell (e a
+> generalidade dos modelos de imagem) através do provider `hf-inference`
+> (passa a devolver `410 Gone: The requested model is deprecated`). Se
+> vires esse erro, muda `IMAGE_PROVIDER` no `.env` ou no painel de
+> definições para `nscale` ou `fal-ai` (ambos continuam a servir o
+> FLUX.1-schnell com o mesmo `HF_TOKEN`, sem precisares de conta separada).
+> Alternativa: usar `IMAGE_PROVIDER=hf-inference` com
+> `IMAGE_MODEL=stabilityai/stable-diffusion-3-medium-diffusers`, que
+> continua disponível nesse provider — mas é um modelo "gated": tens de
+> aceder à página do modelo no browser (com a tua conta HF) e aceitar os
+> termos antes de o token funcionar. Ver detalhes na secção "Geração de
+> imagens" mais abaixo.
+
 Para a funcionalidade de **geração de vídeos** (ver secção própria
-abaixo), define também (usa o mesmo `HF_TOKEN` de cima):
+abaixo), define também:
 ```
-VIDEO_MODEL=Wan-AI/Wan2.2-TI2V-5B
-VIDEO_PROVIDER=fal-ai
+REPLICATE_API_TOKEN=<o teu token do Replicate>
+VIDEO_MODEL=minimax/video-01
 ```
 
 ## Executar
@@ -141,6 +171,30 @@ python app.py
 ```
 
 Depois abre o browser em: **http://localhost:5000**
+
+## Painel de definições
+
+A aplicação tem um painel de definições (ícone ⚙️ no cabeçalho) que permite
+alterar, sem editar o `.env` à mão, os principais parâmetros: modelo LLM,
+token da Hugging Face, provider/modelo de vídeo, OCR e credenciais de email.
+
+- **Como funciona:** ao gravar, o frontend (`script.js`) envia todos os
+  campos preenchidos para `/update-config`, que os grava no `.env` através
+  de `set_key()` (python-dotenv). Não precisas de correr
+  `cp .env.example .env` manualmente — `set_key()` cria o ficheiro `.env`
+  sozinho se ele ainda não existir.
+- **Tema:** o painel segue automaticamente o tema claro/escuro escolhido na
+  aplicação (usa as mesmas variáveis CSS `--bg`, `--panel`, `--text`, etc.
+  definidas em `:root` / `.light-mode` em `style.css`).
+- **Campos disponíveis:** modelo LLM, token da Hugging Face, provider e
+  modelo de imagem/vídeo, ativação e idioma do OCR, servidor/porta/
+  utilizador/password de email, e o token do Replicate (para vídeo).
+- ⚠️ Alterações ao `REPLICATE_API_TOKEN` só têm efeito na próxima geração
+  de vídeo se a app ainda não tiver sido usada para gerar nenhum vídeo
+  nessa sessão — a `VideoTool` cria um cliente Replicate novo a cada
+  pedido, lendo sempre o token atual do `.env`, mas se o servidor Flask
+  tiver arrancado sem token nenhum, o mais seguro continua a ser reiniciar
+  o `app.py` depois de o definires pela primeira vez.
 
 ## Outras Funcionalidades
 
@@ -166,7 +220,17 @@ Foi implementado um sistema completo de internacionalização (i18n), permitindo
 - Bandeira do idioma atualmente selecionado.
 - Alteração automática da bandeira quando o idioma muda.
 - Ícones SVG leves e adaptados ao design da aplicação.
+
 🌙 Tema Claro / Escuro
+
+- Botão de alternância no cabeçalho (`themeToggle`) que aplica/remove a
+  classe `light-mode` ao `<body>`.
+- Todas as cores da interface — incluindo o **painel de definições** — são
+  controladas por variáveis CSS (`--bg`, `--panel`, `--panel-alt`,
+  `--text`, `--text-muted`, `--border`) definidas em `:root` (tema escuro)
+  e sobrepostas em `body.light-mode` (tema claro), pelo que qualquer secção
+  nova do design deve usar essas variáveis em vez de cores fixas para se
+  manter consistente com o tema escolhido.
 
 💬 Nova Conversa
 
@@ -217,10 +281,10 @@ Este sistema facilita a depuração, auditoria e análise do comportamento da Cr
   - `videos/` — vídeos gerados pela `VideoTool`.
   - `logs/` — um ficheiro de log por conversa, com o detalhe de cada agente.
 - **Segurança:** o `.env` contém credenciais reais (password de email,
-  token da Hugging Face, chaves de API). Nunca o commits para o git —
-  confirma que está no `.gitignore`. Se alguma password ou token ficar
-  exposto por engano (ex: partilhado num chat, print, ou commit), troca-o
-  imediatamente.
+  token da Hugging Face, token do Replicate, chaves de API). Nunca o
+  commits para o git — confirma que está no `.gitignore`. Se alguma
+  password ou token ficar exposto por engano (ex: partilhado num chat,
+  print, ou commit), troca-o imediatamente.
 - Podes adicionar ferramentas reais aos agentes (pesquisa na web, leitura de
   ficheiros, etc.) usando `crewai-tools`, por exemplo:
 
@@ -273,7 +337,8 @@ Exemplos de pedidos que funcionam:
 - "lê os emails da caixa de entrada que contenham faturas, se tiverem alguma fatura em anexo junta num documento PDF"
 
 O que a `EmailTool` faz:
-1. Liga por IMAP com as credenciais do `.env`.
+1. Liga por IMAP com as credenciais do `.env` (ou do painel de definições,
+   que inclui agora também o campo de password).
 2. Procura emails por palavra-chave no assunto (`subject_keyword`, por
    omissão `"Fatura"`), com opção de filtrar só os não lidos
    (`unread_only`).
@@ -297,7 +362,8 @@ aplicação**:
 
 1. Vai a https://myaccount.google.com/apppasswords
 2. Cria uma password de aplicação (16 caracteres)
-3. No `.env`:
+3. No `.env` (ou no campo "Password" do separador Email no painel de
+   definições):
    ```
    EMAIL_HOST=imap.gmail.com
    EMAIL_PORT=993
@@ -351,22 +417,31 @@ uma imagem em base64, por isso faz ainda menos sentido tentar fazê-lo
 1. O LLM refina o prompt do humano (mais conciso do que para imagem — os
    modelos de vídeo funcionam melhor com descrições diretas de 2-4 frases:
    sujeito, cena, movimento/ação, câmara, iluminação).
-2. Esse prompt é enviado à Hugging Face (modelo `VIDEO_MODEL`, por omissão
-   `Wan-AI/Wan2.2-TI2V-5B`, via provider `VIDEO_PROVIDER`, por omissão
-   `fal-ai` — os mesmos recomendados na documentação oficial da HF para
-   texto-para-vídeo).
+2. Esse prompt é enviado ao **Replicate** (modelo `VIDEO_MODEL`, por
+   omissão `minimax/video-01`, também conhecido como "Hailuo" — gera vídeos
+   de ~6 segundos a 720p/25fps).
 3. O ficheiro `.mp4` é guardado em `videos/video_AAAAMMDD_HHMMSS.mp4` na
-   raiz do projeto (pasta criada automaticamente) e é servido ao chat via
-   `/videos/<filename>` — ao contrário da imagem, o vídeo **não** é
-   enviado em base64 (seria demasiado grande para uma resposta JSON), o
-   `<video>` no chat aponta diretamente para essa URL.
+   raiz do projeto (pasta criada automaticamente).
 
-**Pré-requisito:** o mesmo `HF_TOKEN` já usado para imagens.
+**Pré-requisito:** um token do Replicate em `REPLICATE_API_TOKEN` no
+`.env` ou no painel de definições (separador Vídeo) — gera um em
+https://replicate.com/account/api-tokens.
 
-**⚠️ Consome muitos mais créditos/tempo do que a geração de imagem.** É
-fácil esgotar a quota gratuita da Hugging Face rapidamente — ver a nota de
-gestão de créditos na secção de imagens acima; aplica-se aqui com ainda
-mais força. A geração pode demorar vários minutos.
+> ⚠️ **Erro `401 Unauthenticated`:** a biblioteca `replicate` cria um
+> cliente HTTP interno só uma vez, na primeira geração de vídeo do
+> processo, e reutiliza-o depois para todos os pedidos seguintes — se
+> definires/corrigires o `REPLICATE_API_TOKEN` só *depois* dessa primeira
+> chamada, o novo token não é aplicado até reiniciares o `app.py`. A
+> `VideoTool` já foi corrigida para criar um `replicate.Client` novo em
+> cada pedido (lendo sempre o token atual do `.env`), mas se ainda vires
+> este erro, reinicia o servidor uma vez depois de configurares o token
+> corretamente.
+
+**Consome créditos pagos no Replicate** (não tem quota gratuita como a
+Hugging Face) — confirma o teu saldo em
+https://replicate.com/account/billing. A geração pode demorar alguns
+minutos e a `VideoTool` já tenta 3 vezes automaticamente antes de desistir,
+com espera crescente entre tentativas.
 
 ## Geração de imagens
 
@@ -384,7 +459,7 @@ partidas. Por isso o `app.py` chama a `ImageTool` (`tools/image_tool.py`)
    humano num prompt de Stable Diffusion detalhado (função
    `_refine_prompt`) — isto sim, cabe perfeitamente numa resposta de texto.
 2. Esse prompt é enviado à API de inferência da Hugging Face (modelo
-   `IMAGE_MODEL`, por omissão `black-forest-labs/FLUX.1-schnell`).
+   `IMAGE_MODEL`, provider `IMAGE_PROVIDER`).
 3. A imagem é guardada em `imagens/imagem_AAAAMMDD_HHMMSS.png` na raiz do
    projeto (a pasta é criada automaticamente se não existir) e devolvida ao
    chat em base64, com um link de download (`/imagens/<filename>`).
@@ -392,16 +467,26 @@ partidas. Por isso o `app.py` chama a `ImageTool` (`tools/image_tool.py`)
 **Pré-requisito:** um token da Hugging Face em `HF_TOKEN` no `.env`
 (gera um em https://huggingface.co/settings/tokens).
 
-**Gestão de créditos e providers:** a Hugging Face dá uma quota mensal
-gratuita de créditos para os *Inference Providers*, partilhada entre todos
-os providers (`hf-inference`, `fal-ai`, etc.) — não é por modelo. Erros
-comuns:
+**Providers e modelos suportados:**
+
+- `black-forest-labs/FLUX.1-schnell` — deixou de estar disponível via
+  `IMAGE_PROVIDER=hf-inference` (devolve `410 Gone`). Continua disponível
+  via `IMAGE_PROVIDER=nscale` ou `IMAGE_PROVIDER=fal-ai`, usando o mesmo
+  `HF_TOKEN`.
+- `stabilityai/stable-diffusion-3-medium-diffusers` — continua disponível
+  via `IMAGE_PROVIDER=hf-inference`, mas é um modelo *gated*: é preciso
+  entrar na página do modelo em huggingface.co (com a conta associada ao
+  `HF_TOKEN`) e aceitar a licença ("Agree and access repository") antes de
+  o token funcionar. Licença não-comercial (uso pessoal/investigação OK).
+
+**Gestão de créditos:** a Hugging Face dá uma quota mensal gratuita de
+créditos para os *Inference Providers*, partilhada entre todos os
+providers — não é por modelo. Erros comuns:
 - `500`/`503` intermitente → normalmente instabilidade temporária do
-  provider (`IMAGE_TOOL` já tenta 3 vezes automaticamente antes de
-  desistir). Podes trocar de provider no `.env`:
-  ```
-  IMAGE_PROVIDER=fal-ai
-  ```
+  provider (`ImageTool` já tenta 3 vezes automaticamente antes de
+  desistir).
+- `410 Gone` → o modelo foi descontinuado nesse provider específico
+  (ver acima — muda de provider ou de modelo).
 - `402 Payment Required` / "depleted your monthly included credits" →
   esgotaste a quota gratuita da conta (isto é ao nível da conta HF, não do
   modelo — trocar de modelo ou provider não resolve). Opções: esperar pelo
@@ -414,10 +499,14 @@ chamada à API da Hugging Face + gravação em disco) e as rotas em `app.py`.
 ## Personalizar
 
 - **Agentes**: edita `crew_agents.py` (roles, goals, backstories, número de agentes).
-- **Design**: edita `static/style.css` (cores em `:root`, tipografia, animações).
+- **Design**: edita `static/style.css` (cores em `:root` / `.light-mode`,
+  tipografia, animações). Usa sempre as variáveis CSS existentes
+  (`--bg`, `--panel`, `--panel-alt`, `--text`, `--text-muted`, `--border`)
+  em vez de cores fixas, para que qualquer secção nova se adapte
+  automaticamente ao tema claro/escuro.
 - **Fluxo**: podes mudar `Process.sequential` para `Process.hierarchical`
   em `crew_agents.py` se quiseres um agente "gestor" a delegar dinamicamente
   em vez de um pipeline fixo.
-- **Deteção de email/imagem**: as palavras-chave usadas para decidir se um
-  pedido é sobre email (`EMAIL_KEYWORDS`) ou imagem (`IMAGE_KEYWORDS`) estão
-  no topo do `app.py`.
+- **Deteção de email/imagem/vídeo**: as palavras-chave usadas para decidir
+  se um pedido é sobre email (`EMAIL_KEYWORDS`), imagem (`IMAGE_KEYWORDS`)
+  ou vídeo (`VIDEO_KEYWORDS`) estão no topo do `app.py`.
