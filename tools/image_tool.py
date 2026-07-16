@@ -96,6 +96,8 @@ class ImageTool(BaseTool):
 
     def _refine_prompt(self, user_prompt: str):
 
+        current_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
+
         instruction = f"""
 Transform the following request into a professional Stable Diffusion prompt.
 
@@ -119,7 +121,7 @@ Request:
 """
 
         kwargs = {
-            "model": MODEL_NAME,
+            "model": current_model,
             "messages": [
                 {
                     "role": "user",
@@ -128,7 +130,7 @@ Request:
             ]
         }
 
-        if MODEL_NAME.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
+        if current_model.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
             kwargs["api_base"] = os.getenv("OLLAMA_API_BASE")
 
         try:

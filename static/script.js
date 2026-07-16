@@ -47,6 +47,87 @@ let translations = {};
 let currentLanguage =
   localStorage.getItem("language") || "pt";
 
+/* ---------------- Definições ---------------- */
+
+async function loadSettings() {
+
+    try {
+
+        const response = await fetch("/api/config");
+
+        if (!response.ok)
+            throw new Error("Erro ao carregar configurações.");
+
+        const config = await response.json();
+
+        const model = document.getElementById("model_name");
+        const email = document.getElementById("email_user");
+
+        if (model)
+            model.value = config.MODEL_NAME || config.model || "";
+
+        if (email)
+            email.value = config.EMAIL_USERNAME || config.email || "";
+
+    }
+    catch (err) {
+
+        console.error(err);
+        alert(err.message);
+
+    }
+
+}
+
+
+
+async function saveSettings() {
+
+    const settings = {
+
+        MODEL_NAME: document.getElementById("model_name").value,
+
+        EMAIL_USERNAME: document.getElementById("email_user").value
+
+    };
+
+    try {
+
+        const response = await fetch("/update-config", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify(settings)
+
+        });
+
+        const result = await response.json();
+
+        if (!response.ok)
+            throw new Error(result.message);
+
+        alert(result.message);
+
+        const panel = document.getElementById("settings-panel");
+
+        if (panel)
+            panel.classList.remove("show");
+
+    }
+    catch (err) {
+
+        console.error(err);
+
+        alert(err.message);
+
+    }
+
+}
+
 async function loadLanguage(language) {
 
   const response =
@@ -801,6 +882,7 @@ composerEl.addEventListener('submit', (e) => {
 });
 
 loadLanguage(currentLanguage);
+loadSettings();
 
 languageFlag.src=
 `/static/img/flags/${currentLanguage}.svg`;

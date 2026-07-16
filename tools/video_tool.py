@@ -61,6 +61,9 @@ class VideoTool(BaseTool):
     args_schema: Type[BaseModel] = VideoToolInput
 
     def _refine_prompt(self, user_prompt: str) -> str:
+
+        current_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
+
         instruction = f"""
 Transform the following request into a detailed text-to-video prompt.
 
@@ -79,10 +82,10 @@ Request:
 {user_prompt}
 """
         kwargs = {
-            "model": MODEL_NAME,
+            "model": current_model,
             "messages": [{"role": "user", "content": instruction}],
         }
-        if MODEL_NAME.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
+        if current_model.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
             kwargs["api_base"] = os.getenv("OLLAMA_API_BASE")
 
         try:

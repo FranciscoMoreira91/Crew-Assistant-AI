@@ -89,6 +89,13 @@
                 <span id="themeIcon">🌙</span>
               </button>
 
+              <button id="settingsToggle" class="theme-toggle"
+                onclick="document.getElementById('settings-overlay').classList.add('show')">
+
+                <span>⚙️</span>
+
+              </button>
+
             </div>
           </div>
 
@@ -162,6 +169,86 @@
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+  <!-- Overlay -->
+  <div id="settings-overlay" class="settings-overlay">
+
+    <div id="settings-panel" class="settings-panel">
+
+      <div class="settings-header">
+
+        <div class="settings-title">
+
+          <div class="settings-icon">⚙️</div>
+
+          <div>
+
+            <h2>Definições</h2>
+            <p>Personalize o funcionamento da aplicação</p>
+
+          </div>
+
+        </div>
+
+        <button class="settings-close" onclick="document.getElementById('settings-overlay').classList.remove('show')">
+
+          ✕
+
+        </button>
+
+      </div>
+
+      <div class="settings-body">
+
+        <div class="settings-section">
+
+          <h3>🤖 Inteligência Artificial</h3>
+
+          <div class="setting-group">
+
+            <label>Modelo LLM</label>
+
+            <input id="model_name" type="text" placeholder="ollama/qwen2.5">
+
+          </div>
+
+        </div>
+
+        <div class="settings-section">
+
+          <h3>📧 Email</h3>
+
+          <div class="setting-group">
+
+            <label>Email (Utilizador)</label>
+
+            <input id="email_user" type="email" placeholder="email@gmail.com">
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="settings-footer">
+
+        <button class="btn-secondary" onclick="document.getElementById('settings-overlay').classList.remove('show')">
+
+          Cancelar
+
+        </button>
+
+        <button class="btn-primary" onclick="saveSettings()">
+
+          💾 Guardar Alterações
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
 </body>
 
 </html>
