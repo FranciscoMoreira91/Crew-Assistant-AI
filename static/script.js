@@ -144,13 +144,48 @@ async function loadSettings() {
 
 async function saveSettings() {
 
-    const settings = {
+    // Mapeia todos os campos do painel de definições para as chaves
+    // esperadas pelo backend (CONFIG_KEYS em app.py). Só inclui um campo
+    // se o elemento existir de facto no HTML, para não sobrescrever
+    // valores de secções que não estejam presentes na página.
+    const FIELD_MAP = {
+        llm_provider: "LLM_PROVIDER",
+        model_name: "MODEL_NAME",
 
-        MODEL_NAME: document.getElementById("model_name").value,
+        image_provider: "IMAGE_PROVIDER",
+        image_model: "IMAGE_MODEL",
 
-        EMAIL_USERNAME: document.getElementById("email_user").value
+        video_provider: "VIDEO_PROVIDER",
+        video_model: "VIDEO_MODEL",
 
+        ocr_enabled: "OCR_ENABLED",
+        ocr_language: "OCR_LANGUAGE",
+
+        email_host: "EMAIL_HOST",
+        email_port: "EMAIL_PORT",
+        email_user: "EMAIL_USERNAME",
+        email_password: "EMAIL_PASSWORD",
+
+        smtp_host: "SMTP_HOST",
+        smtp_port: "SMTP_PORT",
+        smtp_user: "SMTP_USERNAME",
+        smtp_password: "SMTP_PASSWORD",
+
+        openai_api_key: "OPENAI_API_KEY",
+        anthropic_api_key: "ANTHROPIC_API_KEY",
+        hf_token: "HF_TOKEN",
+        fal_key: "FAL_KEY",
+        replicate_api_token: "REPLICATE_API_TOKEN",
     };
+
+    const settings = {};
+
+    for (const [elementId, configKey] of Object.entries(FIELD_MAP)) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            settings[configKey] = el.value;
+        }
+    }
 
     try {
 

@@ -1109,11 +1109,13 @@ body {
 
     overflow:auto;
 
-    background:#1d1f24;
+    background:var(--panel);
 
-    border:1px solid #34363d;
+    border:1px solid var(--border);
 
     border-radius:18px;
+
+    color:var(--text);
 
     box-shadow:
         0 30px 80px rgba(0,0,0,.6);
@@ -1144,7 +1146,7 @@ body {
 
 .settings-description{
 
-    color:#d6d6d6 !important;
+    color:var(--text-muted) !important;
 
     font-size:14px;
 
@@ -1164,7 +1166,7 @@ body {
 
     padding:25px 30px;
 
-    border-bottom:1px solid #333;
+    border-bottom:1px solid var(--border);
 
 }
 
@@ -1202,7 +1204,7 @@ body {
 
     margin:0;
 
-    color:#fff;
+    color:var(--text);
 
 }
 
@@ -1210,7 +1212,7 @@ body {
 
     margin-top:5px;
 
-    color:#999;
+    color:var(--text-muted);
 
     font-size:14px;
 
@@ -1222,7 +1224,7 @@ body {
 
     background:none;
 
-    color:#aaa;
+    color:var(--text-muted);
 
     font-size:22px;
 
@@ -1234,7 +1236,7 @@ body {
 
 .settings-close:hover{
 
-    color:#fff;
+    color:var(--text);
 
     transform:rotate(90deg);
 
@@ -1260,7 +1262,7 @@ body {
 
     margin-bottom:20px;
 
-    color:#fff;
+    color:var(--text);
 
     font-size:17px;
 
@@ -1278,7 +1280,7 @@ body {
 
 .setting-group label{
 
-    color:#d8d8d8;
+    color:var(--text-muted);
 
     font-size:14px;
 
@@ -1296,11 +1298,11 @@ body {
 
     border-radius:10px;
 
-    background:#2d2f36;
+    background:var(--panel-alt);
 
-    border:1px solid #4b4d55;
+    border:1px solid var(--border);
 
-    color:white;
+    color:var(--text);
 
     padding:0 15px;
 
@@ -1327,7 +1329,7 @@ body {
 
     padding:25px 30px;
 
-    border-top:1px solid #333;
+    border-top:1px solid var(--border);
 
 }
 
@@ -1361,11 +1363,11 @@ body {
 
 .btn-secondary{
 
-    background:#32343b;
+    background:var(--panel-alt);
 
-    color:white;
+    color:var(--text);
 
-    border:none;
+    border:1px solid var(--border);
 
     padding:12px 28px;
 
@@ -1379,7 +1381,7 @@ body {
 
 .btn-secondary:hover{
 
-    background:#444851;
+    background:var(--border);
 
 }
 
@@ -1387,9 +1389,9 @@ body {
 
     width:220px;
 
-    background:#18191d;
+    background:var(--bg);
 
-    border-right:1px solid #333;
+    border-right:1px solid var(--border);
 
     padding:20px 0;
 
@@ -1409,7 +1411,7 @@ body {
 
 .settings-tab h3{
 
-    color:white;
+    color:var(--text);
 
     font-size:22px;
 
@@ -1421,7 +1423,7 @@ body {
 
 .settings-tab h4{
 
-    color:#d8d8d8;
+    color:var(--text-muted);
 
     margin-top:30px;
 
@@ -1441,7 +1443,7 @@ body {
 
     border:none;
 
-    color:#bdbdbd;
+    color:var(--text-muted);
 
     font-size:15px;
 
@@ -1459,9 +1461,9 @@ body {
 
 .settings-tab-btn:hover{
 
-    background:#2a2c32;
+    background:var(--panel-alt);
 
-    color:white;
+    color:var(--text);
 
 }
 
@@ -1501,7 +1503,7 @@ body {
 
     border:none;
 
-    border-top:1px solid #36383f;
+    border-top:1px solid var(--border);
 
     margin:35px 0;
 

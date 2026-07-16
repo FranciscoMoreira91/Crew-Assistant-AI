@@ -30,7 +30,6 @@ from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 
 VIDEO_MODEL = os.getenv("VIDEO_MODEL", "minimax/video-01")
 
@@ -122,11 +121,19 @@ Request:
         return resp.content
 
     def _run(self, prompt: str):
-        if not REPLICATE_API_TOKEN:
+        # Lê o token diretamente do ambiente a cada chamada (em vez de usar
+        # o cliente global "replicate.run", que faz cache do cabeçalho de
+        # autenticação na primeira utilização e nunca mais o atualiza,
+        # mesmo que o REPLICATE_API_TOKEN mude a seguir no .env/painel).
+        replicate_api_token = os.getenv("REPLICATE_API_TOKEN")
+
+        if not replicate_api_token:
             raise RuntimeError(
                 "REPLICATE_API_TOKEN não está definido no .env. Gera um "
                 "token em https://replicate.com/account/api-tokens."
             )
+
+        client = replicate.Client(api_token=replicate_api_token)
 
         prompt_refinado = self._refine_prompt(prompt)
 
@@ -137,7 +144,7 @@ Request:
         output = None
         for tentativa in range(1, 4):
             try:
-                output = replicate.run(
+                output = client.run(
                     VIDEO_MODEL,
                     input={
                         "prompt": prompt_refinado,

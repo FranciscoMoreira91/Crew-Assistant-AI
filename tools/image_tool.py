@@ -17,7 +17,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 IMAGE_MODEL = os.getenv(
     "IMAGE_MODEL",
-    "black-forest-labs/FLUX.1-schnell"
+    "stabilityai/stable-diffusion-3-medium-diffusers"
 )
 
 # O provider "hf-inference" (serverless, gratuito) tem estado instável com
