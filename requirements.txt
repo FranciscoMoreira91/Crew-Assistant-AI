@@ -1,8 +1,8 @@
 crewai>=1.15.0,<2.0.0
 flask==3.0.3
 flask-cors==4.0.1
-python-dotenv==1.0.1
-litellm
+python-dotenv==1.2.2
+litellm==1.72.6
 requests
 pytesseract
 Pillow

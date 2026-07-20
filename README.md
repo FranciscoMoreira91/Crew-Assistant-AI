@@ -101,6 +101,38 @@ toda a equipa.
 
 ## Instalação
 
+### Windows — instalação num clique (recomendado para quem não é técnico)
+
+O projeto inclui ficheiros `.bat` que tratam de tudo automaticamente
+(ambiente virtual, dependências, `.env`). Ordem de utilização:
+
+1. **`instalar.bat`** — corre-se **uma única vez** (ou sempre que quiseres
+   reinstalar/repor tudo de raiz). Este ficheiro:
+   - verifica se o Python está instalado e no PATH;
+   - cria um ambiente virtual novo (`venv`) e instala todas as dependências
+     de `requirements.txt`;
+   - cria o ficheiro `.env` a partir do `.env.example` (as chaves de API
+     têm de ser preenchidas manualmente depois — ver secção acima);
+   - gera automaticamente um ficheiro **`desinstalar.bat`** nesta pasta;
+   - no fim, já deixa a aplicação a correr e abre o browser sozinho assim
+     que o servidor estiver pronto.
+
+2. **`iniciar.bat`** — usa este no dia a dia, para reabrir a app depois da
+   primeira instalação. Não é preciso voltar a correr o `instalar.bat`.
+   Lança o `app.py` sem janela de consola visível e só abre o browser
+   quando o servidor já estiver mesmo a responder (espera até 60 segundos).
+
+3. **`desinstalar.bat`** — só é preciso se quiseres remover a instalação
+   (apaga o `venv`; opcionalmente também o `.env`). É criado
+   automaticamente pelo `instalar.bat`, por isso só aparece depois de o
+   correres pelo menos uma vez.
+
+> O ficheiro `iniciar_oculto.vbs` não se corre diretamente — é chamado por
+> trás tanto pelo `instalar.bat` como pelo `iniciar.bat`, e é ele que lança
+> o `app.py` sem consola e controla quando o browser deve abrir.
+
+### Instalação manual (Linux/macOS ou Windows via terminal)
+
 ```bash
 cd crew_chatbot
 python3 -m venv venv
@@ -166,6 +198,10 @@ VIDEO_MODEL=minimax/video-01
 
 ## Executar
 
+**Windows (com instalação num clique):** usa o `iniciar.bat` (ver secção
+"Instalação" acima).
+
+**Linux/macOS ou terminal manual:**
 ```bash
 python app.py
 ```
