@@ -26,6 +26,7 @@ import os
 import io
 import email
 import imaplib
+import time
 from email.header import decode_header
 from datetime import datetime
 from typing import Type, List, Tuple
@@ -39,6 +40,100 @@ from pypdf import PdfReader, PdfWriter
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF_DIR = os.path.join(BASE_DIR, "PDF")
 os.makedirs(PDF_DIR, exist_ok=True)
+
+# Cache simples do token de acesso Outlook/Microsoft 365 em memória do
+# processo, para não pedir um token novo a cada operação de email
+# (correção issue #3 — ver get_access_token() mais abaixo).
+_ms_token_cache = {"access_token": None, "expires_at": 0}
+
+# Scope IMAP necessário para autenticar via XOAUTH2 no Outlook/M365.
+_MS_IMAP_SCOPE = ["https://outlook.office365.com/IMAP.AccessAsUser.All"]
+
+
+def get_access_token() -> str:
+    """
+    Obtém um token de acesso OAuth2 (Bearer) para autenticar via IMAP
+    XOAUTH2 numa caixa de correio Outlook/Microsoft 365.
+
+    Esta função não existia (era chamada em _connect() mas nunca tinha
+    sido definida nem importada), o que fazia qualquer ligação a uma
+    conta Outlook falhar sempre com "NameError: name 'get_access_token'
+    is not defined". Está agora implementada com base na biblioteca
+    `msal`, usando o fluxo "Resource Owner Password Credentials" (ROPC),
+    a forma mais simples de obter um token sem interação do utilizador
+    num servidor.
+
+    Requer, no .env:
+        MS_CLIENT_ID      ID da aplicação registada no Azure AD /
+                           Microsoft Entra (App registrations).
+        MS_TENANT_ID       ID do tenant, ou "common" para contas pessoais
+                           e organizacionais em simultâneo (por omissão).
+        EMAIL_USERNAME e EMAIL_PASSWORD (já existentes) — usados como
+                           credenciais do ROPC.
+
+    Nota: o ROPC não funciona em contas com MFA ativa nem em muitos
+    tenants empresariais mais restritos (é uma limitação da própria
+    Microsoft, não desta aplicação); nesses casos é necessário migrar
+    para um fluxo interativo (device code / autorização), fora do
+    âmbito desta correção pontual.
+    """
+    now = time.time()
+    if _ms_token_cache["access_token"] and _ms_token_cache["expires_at"] > now + 30:
+        return _ms_token_cache["access_token"]
+
+    try:
+        import msal
+    except ImportError as exc:
+        raise RuntimeError(
+            "A integração com Outlook/Microsoft 365 requer a biblioteca "
+            "'msal' (adiciona 'msal' ao requirements.txt e corre "
+            "'pip install msal')."
+        ) from exc
+
+    client_id = os.getenv("MS_CLIENT_ID")
+    tenant_id = os.getenv("MS_TENANT_ID", "common")
+    username = os.getenv("EMAIL_USERNAME")
+    password = os.getenv("EMAIL_PASSWORD")
+
+    if not client_id:
+        raise RuntimeError(
+            "MS_CLIENT_ID não está configurado no .env. Para ligar a uma "
+            "conta Outlook/Microsoft 365 é preciso registar uma aplicação "
+            "em https://entra.microsoft.com (App registrations) com a "
+            "permissão delegada 'IMAP.AccessAsUser.All', e colocar o "
+            "respetivo ID da aplicação em MS_CLIENT_ID no .env."
+        )
+    if not username or not password:
+        raise RuntimeError(
+            "EMAIL_USERNAME/EMAIL_PASSWORD não configurados — necessários "
+            "para autenticar a conta Outlook/Microsoft 365."
+        )
+
+    app = msal.PublicClientApplication(
+        client_id,
+        authority=f"https://login.microsoftonline.com/{tenant_id}",
+    )
+
+    resultado = app.acquire_token_by_username_password(
+        username=username,
+        password=password,
+        scopes=_MS_IMAP_SCOPE,
+    )
+
+    if "access_token" not in resultado:
+        erro = resultado.get("error_description") or resultado.get("error") or "erro desconhecido"
+        raise RuntimeError(
+            f"Não foi possível autenticar no Outlook/Microsoft 365: {erro}. "
+            f"Se a conta tiver verificação em dois passos (MFA) ativa, este "
+            f"método de autenticação (ROPC) não é suportado pela Microsoft "
+            f"— é necessário um fluxo interativo, que esta versão ainda não "
+            f"implementa."
+        )
+
+    _ms_token_cache["access_token"] = resultado["access_token"]
+    _ms_token_cache["expires_at"] = now + int(resultado.get("expires_in", 3600))
+
+    return resultado["access_token"]
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp")
 PDF_EXTENSION = ".pdf"
