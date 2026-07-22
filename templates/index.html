@@ -415,6 +415,32 @@
 
             </div>
 
+            <div class="setting-grid">
+
+              <div class="setting-group">
+
+                <label>Client ID (Outlook/Microsoft 365)</label>
+
+                <input id="ms_client_id" type="text" placeholder="Só necessário para Servidor = outlook.office365.com">
+
+              </div>
+
+              <div class="setting-group">
+
+                <label>Tenant ID (Outlook/Microsoft 365)</label>
+
+                <input id="ms_tenant_id" type="text" placeholder="common">
+
+              </div>
+
+            </div>
+
+            <small class="settings-description">
+              Necessário apenas para contas Outlook/Microsoft 365: regista uma aplicação em
+              https://entra.microsoft.com (App registrations) com a permissão delegada "IMAP.AccessAsUser.All"
+              e coloca aqui o respetivo Client ID.
+            </small>
+
             <hr>
 
           </div>

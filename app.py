@@ -94,6 +94,11 @@ CONFIG_KEYS = {
     "EMAIL_USERNAME",
     "EMAIL_PASSWORD",
 
+    # Necessários apenas para contas Outlook/Microsoft 365 (ver correção
+    # issue #3 em tools/email_tool.py::get_access_token)
+    "MS_CLIENT_ID",
+    "MS_TENANT_ID",
+
     "SMTP_HOST",
     "SMTP_PORT",
     "SMTP_USERNAME",
@@ -250,35 +255,29 @@ def download_video(filename):
 
 @app.route("/api/config/model", methods=["POST"])
 def update_model():
+    """
+    Endpoint não usado pelo frontend atual (que usa sempre /update-config
+    para tudo, incluindo o MODEL_NAME), mas mantido para compatibilidade
+    com eventuais integrações externas que já o chamem diretamente.
+
+    Correção issue #11: gravava sempre no caminho relativo ".env", em
+    vez do ENV_FILE absoluto usado no resto da app — se o processo Flask
+    fosse arrancado a partir de outra pasta de trabalho, esta rota podia
+    criar/editar um .env diferente do que a app efetivamente lê, e a
+    alteração parecia "não ter efeito".
+    """
     data = request.get_json(force=True)
     new_model = data.get("model_name")
-    
+
     if not new_model:
         return jsonify({"error": "Nome do modelo não fornecido"}), 400
-    
+
     # 1. Atualiza a variável no ambiente do processo atual
     os.environ["MODEL_NAME"] = new_model
-    
-    # 2. Persiste a alteração no ficheiro .env
-    # (Reescrevemos o .env para garantir que a mudança sobreviva a restarts)
-    try:
-        from dotenv import set_key
-        set_key(".env", "MODEL_NAME", new_model)
-    except ImportError:
-        # Fallback se não tiveres a função set_key (ou se preferires manualmente)
-        with open(".env", "r") as f:
-            lines = f.readlines()
-        with open(".env", "w") as f:
-            found = False
-            for line in lines:
-                if line.startswith("MODEL_NAME="):
-                    f.write(f"MODEL_NAME={new_model}\n")
-                    found = True
-                else:
-                    f.write(line)
-            if not found:
-                f.write(f"MODEL_NAME={new_model}\n")
-                
+
+    # 2. Persiste a alteração no ficheiro .env correto (caminho absoluto)
+    set_key(ENV_FILE, "MODEL_NAME", new_model)
+
     return jsonify({"message": f"Modelo alterado com sucesso para: {new_model}"})
 
 @app.route("/update-config", methods=["POST"])
@@ -363,6 +362,9 @@ def get_config():
         "EMAIL_USERNAME": os.getenv("EMAIL_USERNAME", ""),
         "EMAIL_PASSWORD": os.getenv("EMAIL_PASSWORD", ""),
 
+        "MS_CLIENT_ID": os.getenv("MS_CLIENT_ID", ""),
+        "MS_TENANT_ID": os.getenv("MS_TENANT_ID", ""),
+
         "SMTP_HOST": os.getenv("SMTP_HOST", ""),
         "SMTP_PORT": os.getenv("SMTP_PORT", ""),
         "SMTP_USERNAME": os.getenv("SMTP_USERNAME", ""),
@@ -435,7 +437,11 @@ def chat():
 
     history_text = get_history_text(session_id) + extra_context + build_reply_context(reply_to)
 
-    logger = CrewLogger()
+    # Correção issue #13: o CrewLogger era criado aqui mesmo quando o
+    # pedido acabava por ser de vídeo/imagem (que não usam este logger),
+    # criando um ficheiro de log praticamente vazio a cada pedido. Passa
+    # a ser criado só quando é mesmo necessário (pedido de texto, mais
+    # abaixo), e é efetivamente utilizado em vez de descartado.
 
     if is_video_request(user_message):
         try:
@@ -465,17 +471,25 @@ def chat():
             "type": "image",
             "image_base64": resultado_imagem["base64"],
             "download_url": f"/imagens/{resultado_imagem['filename']}",
+            "prompt_used": resultado_imagem.get("prompt", user_message),
         }
         if attachment_info:
             payload["attachment"] = attachment_info
         return jsonify(payload)
 
+    logger = CrewLogger(session_id)
+    logger.user(user_message)
+
     resposta = run_crew(
         user_message,
         history_text,
+        logger=logger,
         include_email=is_email_request(user_message) and not (image_urls or other_files),
     )
     save_message(session_id, "assistant", resposta)
+
+    logger.response(resposta)
+    logger.finish()
 
     payload = {"session_id": session_id, "type": "text", "reply": resposta}
     if attachment_info:
@@ -587,6 +601,7 @@ def chat_stream():
                     "type": "image",
                     "image_base64": resultado_imagem["base64"],
                     "download_url": f"/imagens/{resultado_imagem['filename']}",
+                    "prompt_used": resultado_imagem.get("prompt", user_message),
                     "session_id": session_id,
                 })
                 return
@@ -628,5 +643,15 @@ def chat_stream():
 
 
 if __name__ == "__main__":
+    # Correção issue #4: a app corria sempre com debug=True e exposta em
+    # 0.0.0.0 (qualquer dispositivo na rede local), o que ativa o
+    # debugger interativo do Werkzeug — um risco de execução de código
+    # arbitrário se alguém na mesma rede conseguir acionar um erro não
+    # tratado. Por omissão, corre agora em modo produção (debug=False) e
+    # só acessível a partir do próprio computador (127.0.0.1). Para
+    # ativar deliberadamente o modo de desenvolvimento/rede local,
+    # define FLASK_DEBUG=true e/ou FLASK_HOST=0.0.0.0 no .env.
     port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    debug = os.getenv("FLASK_DEBUG", "false").strip().lower() in ("true", "1", "sim", "yes")
+    host = os.getenv("FLASK_HOST", "127.0.0.1")
+    app.run(host=host, port=port, debug=debug)
