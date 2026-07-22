@@ -27,26 +27,54 @@ _tesseract_cmd = os.getenv("TESSERACT_CMD")
 if _tesseract_cmd:
     pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
 
-OCR_LANGUAGES = os.getenv("OCR_LANGUAGES", "por+eng")
+
+def _ocr_languages() -> str:
+    """
+    Lê o(s) idioma(s) de OCR a usar (correção issue #5).
+
+    O painel de Definições e o backend (app.py) guardam a escolha do
+    utilizador em OCR_LANGUAGE (singular), mas este módulo só lia
+    OCR_LANGUAGES (plural, definida no .env.example) — os dois nomes
+    nunca coincidiam, por isso mudar o idioma na UI não tinha qualquer
+    efeito. Agora dá-se prioridade a OCR_LANGUAGE (o que o utilizador
+    escolhe nas Definições) e cai-se em OCR_LANGUAGES como alternativa
+    de compatibilidade com instalações mais antigas, mantendo sempre
+    "por+eng" como valor por omissão.
+    """
+    return os.getenv("OCR_LANGUAGE") or os.getenv("OCR_LANGUAGES", "por+eng")
+
+
+def _ocr_enabled() -> bool:
+    """Correção issue #6: o interruptor 'Ativar OCR' das Definições não
+    era verificado em lado nenhum antes de correr o OCR. Por omissão o
+    OCR está ativo (comportamento igual ao anterior), mas agora
+    OCR_ENABLED=false desliga-o de facto."""
+    return os.getenv("OCR_ENABLED", "true").strip().lower() not in ("false", "0", "nao", "não", "no")
 
 
 def images_to_searchable_pdf(images: list[bytes], filename_prefix: str = "anexos") -> dict:
     """
     images: lista de imagens em bytes (jpg/png/etc.)
 
-    Faz OCR a cada imagem, cria uma página de PDF pesquisável por imagem
-    (imagem visível + texto OCR invisível por cima) e junta tudo num único
-    ficheiro PDF guardado em PDF/.
+    Cria uma página de PDF por imagem e junta tudo num único ficheiro PDF
+    guardado em PDF/. Se o OCR estiver ativo (OCR_ENABLED, ver
+    _ocr_enabled()), cada página fica pesquisável (imagem visível + texto
+    OCR invisível por cima); caso contrário, a imagem é apenas incluída
+    no PDF sem passar pelo Tesseract (mais rápido, sem texto pesquisável).
 
     Devolve:
         {
             "pdf_path": caminho absoluto do PDF gerado,
             "pdf_filename": nome do ficheiro,
-            "extracted_text": todo o texto OCR concatenado,
+            "extracted_text": todo o texto OCR concatenado (vazio se o
+                               OCR estiver desativado),
         }
     """
     if not images:
         raise ValueError("Nenhuma imagem fornecida para processar.")
+
+    ocr_ativo = _ocr_enabled()
+    idiomas = _ocr_languages()
 
     writer = PdfWriter()
     textos = []
@@ -54,15 +82,24 @@ def images_to_searchable_pdf(images: list[bytes], filename_prefix: str = "anexos
     for img_bytes in images:
         image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
-        texto = pytesseract.image_to_string(image, lang=OCR_LANGUAGES)
-        textos.append(texto.strip())
+        if ocr_ativo:
+            texto = pytesseract.image_to_string(image, lang=idiomas)
+            textos.append(texto.strip())
 
-        # Página de PDF com a imagem + camada de texto OCR pesquisável
-        pagina_pdf_bytes = pytesseract.image_to_pdf_or_hocr(
-            image, extension="pdf", lang=OCR_LANGUAGES
-        )
-        reader = PdfReader(io.BytesIO(pagina_pdf_bytes))
-        writer.add_page(reader.pages[0])
+            # Página de PDF com a imagem + camada de texto OCR pesquisável
+            pagina_pdf_bytes = pytesseract.image_to_pdf_or_hocr(
+                image, extension="pdf", lang=idiomas
+            )
+            reader = PdfReader(io.BytesIO(pagina_pdf_bytes))
+            writer.add_page(reader.pages[0])
+        else:
+            # OCR desativado: página só com a imagem, sem passar pelo
+            # Tesseract nem criar camada de texto pesquisável.
+            buffer = io.BytesIO()
+            image.save(buffer, format="PDF")
+            buffer.seek(0)
+            reader = PdfReader(buffer)
+            writer.add_page(reader.pages[0])
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     pdf_filename = f"{filename_prefix}_{timestamp}.pdf"

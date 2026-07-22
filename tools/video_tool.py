@@ -1,39 +1,29 @@
 """
 video_tool.py
 -------------
-Geração de vídeos curtos a partir de texto, usando o Replicate
-(https://replicate.com) — não depende da Hugging Face.
+Geração de vídeos curtos a partir de texto, usando o Hugging Face Inference API[](https://huggingface.co/docs/huggingface_hub/en/package_reference/inference_client).
 
-Modelo por omissão: minimax/video-01 (também conhecido como "Hailuo"),
-um modelo texto-para-vídeo bem documentado no Replicate, que gera vídeos
-de ~6 segundos a 720p/25fps a partir de um prompt em texto.
-
-Autenticação: define REPLICATE_API_TOKEN no .env
-(gera um token em https://replicate.com/account/api-tokens). A biblioteca
-`replicate` lê esta variável de ambiente automaticamente.
+Modelo por omissão: Lightricks/LTX-Video (ou outro modelo suportado via Inference Providers).
+Autenticação: define HF_TOKEN no .env (token com permissões de Inference).
+A biblioteca `huggingface_hub` lê esta variável automaticamente.
 
 NOTA: tal como a ImageTool, esta tool NÃO é chamada através de um Agent do
-CrewAI — é chamada diretamente pelo app.py. Um vídeo é ainda maior que uma
-imagem, por isso faz ainda menos sentido tentar fazê-lo "passar" pela
-resposta de texto de um LLM.
+CrewAI — é chamada diretamente pelo app.py.
 """
 
 import os
 import time
-import litellm
-import replicate
-import requests
-
 from datetime import datetime
 from typing import Type
+
+import requests
+from huggingface_hub import InferenceClient
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
-VIDEO_MODEL = os.getenv("VIDEO_MODEL", "minimax/video-01")
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raiz do projeto (um nível acima de tools/)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raiz do projeto
 VIDEOS_DIR = os.path.join(BASE_DIR, "videos")
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
@@ -44,30 +34,22 @@ class VideoToolInput(BaseModel):
 
 class VideoTool(BaseTool):
     name: str = "VideoTool"
-
     description: str = (
         """
         Ferramenta responsável pela geração de vídeos curtos a partir de texto.
-
         Recebe um prompt completo e gera um vídeo.
-
         O prompt fornecido já deve estar totalmente otimizado.
-
         A ferramenta não melhora prompts nem interpreta pedidos do utilizador.
         """
     )
-
     args_schema: Type[BaseModel] = VideoToolInput
 
     def _refine_prompt(self, user_prompt: str) -> str:
-
+        """Mantido igual ao original."""
         current_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
-
         instruction = f"""
 Transform the following request into a detailed text-to-video prompt.
-
 Rules:
-
 - Only output the prompt.
 - Never explain.
 - Never use quotes.
@@ -75,18 +57,18 @@ Rules:
   movement, lighting and atmosphere.
 - Keep it concise (2-4 sentences) — video prompts work best shorter and
   more literal than image prompts.
-
 Request:
-
 {user_prompt}
 """
+        # (código de litellm mantido igual)
+        import litellm
+
         kwargs = {
             "model": current_model,
             "messages": [{"role": "user", "content": instruction}],
         }
         if current_model.startswith("ollama/") and os.getenv("OLLAMA_API_BASE"):
             kwargs["api_base"] = os.getenv("OLLAMA_API_BASE")
-
         try:
             response = litellm.completion(**kwargs)
             texto = response.choices[0].message.content.strip()
@@ -94,78 +76,54 @@ Request:
         except Exception:
             return user_prompt
 
-    def _extract_video_bytes(self, output) -> bytes:
-        """
-        O `replicate.run(...)` pode devolver, consoante o modelo e a versão
-        da biblioteca: uma lista de resultados, um objeto FileOutput
-        (com .read() ou .url()), ou diretamente uma URL em string. Esta
-        função normaliza tudo isso para bytes do vídeo.
-        """
-        if isinstance(output, list):
-            if not output:
-                raise RuntimeError("O Replicate não devolveu nenhum resultado.")
-            output = output[0]
-
-        # Objeto tipo ficheiro (FileOutput das versões mais recentes do SDK)
-        if hasattr(output, "read"):
-            return output.read()
-
-        # Já são bytes
-        if isinstance(output, (bytes, bytearray)):
-            return bytes(output)
-
-        # URL (string, ou objeto com método .url())
-        url = output.url() if callable(getattr(output, "url", None)) else str(output)
-        resp = requests.get(url, timeout=180)
-        resp.raise_for_status()
-        return resp.content
-
     def _run(self, prompt: str):
-        # Lê o token diretamente do ambiente a cada chamada (em vez de usar
-        # o cliente global "replicate.run", que faz cache do cabeçalho de
-        # autenticação na primeira utilização e nunca mais o atualiza,
-        # mesmo que o REPLICATE_API_TOKEN mude a seguir no .env/painel).
-        replicate_api_token = os.getenv("REPLICATE_API_TOKEN")
+        hf_token = os.getenv("HF_TOKEN")
+        video_model = os.getenv("VIDEO_MODEL", "Lightricks/LTX-Video-0.9.8-13B-distilled")  # ou "tencent/HunyuanVideo", etc.
 
-        if not replicate_api_token:
+        if not hf_token:
             raise RuntimeError(
-                "REPLICATE_API_TOKEN não está definido no .env. Gera um "
-                "token em https://replicate.com/account/api-tokens."
+                "HF_TOKEN não está definido no .env. Gera um token em "
+                "https://huggingface.co/settings/tokens (com permissão Inference)."
             )
 
-        client = replicate.Client(api_token=replicate_api_token)
+        client = InferenceClient(token=hf_token)
 
         prompt_refinado = self._refine_prompt(prompt)
 
-        # A geração de vídeo demora bastante e por vezes falha de forma
-        # transitória (fila cheia, timeout do modelo) — vale a pena repetir
-        # algumas vezes antes de desistir.
+        # Geração de vídeo pode demorar bastante
         ultimo_erro = None
         output = None
         for tentativa in range(1, 4):
             try:
-                output = client.run(
-                    VIDEO_MODEL,
-                    input={
-                        "prompt": prompt_refinado,
-                        "prompt_optimizer": True,
-                    },
+                # text_to_video retorna bytes do vídeo (geralmente MP4)
+                output = client.text_to_video(
+                    prompt_refinado,
+                    model=video_model,
+                    # Parâmetros opcionais comuns:
+                    # num_frames=16,          # número de frames
+                    # num_inference_steps=20, # qualidade vs velocidade
+                    # guidance_scale=7.5,
+                    # seed=42,
                 )
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 ultimo_erro = exc
                 if tentativa < 3:
-                    time.sleep(3 * tentativa)
+                    time.sleep(5 * tentativa)  # espera mais generosa
 
         if output is None:
             raise RuntimeError(
-                f"O Replicate ('{VIDEO_MODEL}') falhou após 3 tentativas. "
-                f"Confirma o teu saldo/créditos em "
-                f"https://replicate.com/account/billing, ou tenta "
-                f"novamente daqui a pouco. Erro original: {ultimo_erro}"
+                f"Hugging Face Inference ('{video_model}') falhou após 3 tentativas. "
+                f"Verifica créditos/saldo em https://huggingface.co/settings/billing "
+                f"ou tenta novamente mais tarde. Erro: {ultimo_erro}"
             )
 
-        video_bytes = self._extract_video_bytes(output)
+        # output já deve ser bytes do vídeo
+        if isinstance(output, (bytes, bytearray)):
+            video_bytes = bytes(output)
+        else:
+            # fallback caso retorne outro formato
+            video_bytes = output
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"video_{timestamp}.mp4"

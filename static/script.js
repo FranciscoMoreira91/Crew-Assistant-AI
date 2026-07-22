@@ -102,6 +102,12 @@ async function loadSettings() {
         if (document.getElementById("email_password"))
             document.getElementById("email_password").value = config.EMAIL_PASSWORD || "";
 
+        if (document.getElementById("ms_client_id"))
+            document.getElementById("ms_client_id").value = config.MS_CLIENT_ID || "";
+
+        if (document.getElementById("ms_tenant_id"))
+            document.getElementById("ms_tenant_id").value = config.MS_TENANT_ID || "";
+
         // SMTP
         if (document.getElementById("smtp_host"))
             document.getElementById("smtp_host").value = config.SMTP_HOST || "";
@@ -165,6 +171,8 @@ async function saveSettings() {
         email_port: "EMAIL_PORT",
         email_user: "EMAIL_USERNAME",
         email_password: "EMAIL_PASSWORD",
+        ms_client_id: "MS_CLIENT_ID",
+        ms_tenant_id: "MS_TENANT_ID",
 
         smtp_host: "SMTP_HOST",
         smtp_port: "SMTP_PORT",
@@ -448,6 +456,15 @@ newChatBtn.onclick = () => {
 
 };
 
+// Correção issue #10: saveHistory() só corria ao clicar em "Nova
+// Conversa" — se o utilizador atualizasse ou fechasse a página sem
+// clicar nesse botão, a conversa desaparecia da barra lateral (embora o
+// backend, em memória, ainda soubesse do contexto via session_id).
+// Agora a conversa é também guardada ao sair da página.
+window.addEventListener("beforeunload", () => {
+  saveHistory();
+});
+
 /* ---------------- Relay (agentes) ---------------- */
 
 function getNodeEl(key) {
@@ -668,22 +685,39 @@ function addUserMessageWithAttachments(text, attachments, quotedText) {
   scrollToBottom();
   return div;
 }
-function addImageMessage(imageBase64, promptUsed) {
+function addImageMessage(imageBase64, promptUsed, downloadUrl) {
   removeEmptyState();
   const wrapper = document.createElement('div');
   wrapper.className = 'msg msg--assistant msg--image';
 
   const img = document.createElement('img');
   img.src = `data:image/png;base64,${imageBase64}`;
-  img.alt = promptUsed || 'Imagem gerada';
+  // Correção issue #8: promptUsed podia chegar como undefined (o backend
+  // não enviava prompt_used), o que fazia a legenda mostrar literalmente
+  // o texto "undefined". Usa-se agora um valor de reserva sensato.
+  const legenda = promptUsed || 'Imagem gerada';
+  img.alt = legenda;
   img.className = 'msg__image';
 
   const caption = document.createElement('p');
   caption.className = 'msg__caption';
-  caption.textContent = promptUsed;
+  caption.textContent = legenda;
 
   wrapper.appendChild(img);
   wrapper.appendChild(caption);
+
+  // Correção issue #14: a imagem gerada nunca tinha uma ligação de
+  // download visível no chat (só a versão embutida em base64).
+  if (downloadUrl) {
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'msg__pdf-link';
+    link.textContent = '⬇️ Descarregar imagem';
+    wrapper.appendChild(link);
+  }
+
   chatMessagesEl.appendChild(wrapWithAvatar(wrapper, 'assistant', 'msg-row--image'));
   scrollToBottom();
   return wrapper;
@@ -925,7 +959,7 @@ async function sendMessage(message, attachments, replyTo) {
 
           progressEl.remove();
 
-          addImageMessage(payload.image_base64, payload.prompt_used);
+          addImageMessage(payload.image_base64, payload.prompt_used, payload.download_url);
 
           currentConversation.push({
             role: "assistant",
