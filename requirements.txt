@@ -12,3 +12,4 @@ replicate
 openpyxl
 python-docx
 python-pptx
+msal
