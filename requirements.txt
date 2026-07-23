@@ -12,4 +12,6 @@ replicate
 openpyxl
 python-docx
 python-pptx
-msal
+icalendar
+apscheduler
+win10toast   # opcional: ativa notificações nativas do Windows para o aviso diário de agenda

@@ -227,6 +227,10 @@
             📧 Email
           </button>
 
+          <button class="settings-tab-btn" data-tab="agenda">
+            📅 Agenda
+          </button>
+
         </aside>
 
         <!-- Conteúdo -->
@@ -442,6 +446,45 @@
             </small>
 
             <hr>
+
+          </div>
+
+          <!-- Agenda -->
+          <div class="settings-tab" id="tab-agenda">
+
+            <h3>📅 Aviso Diário de Agenda</h3>
+
+            <p class="settings-description">
+              Quando ativo, a app verifica todos os dias, à hora escolhida, os convites de calendário (.ics)
+              recebidos na mesma caixa de correio configurada na aba Email, e mostra aqui no chat um aviso com os
+              eventos de hoje — sem precisares de perguntar.
+            </p>
+
+            <div class="setting-group">
+
+              <label>Aviso diário automático</label>
+
+              <select id="agenda_aviso_ativo">
+
+                <option value="true">Ativo</option>
+                <option value="false">Desativado</option>
+
+              </select>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Hora do aviso</label>
+
+              <input id="agenda_aviso_hora" type="time" value="08:00">
+
+              <small class="settings-description">
+                Reutiliza automaticamente o Servidor/Utilizador/Password já definidos na aba Email — não é preciso
+                configurar mais nada.
+              </small>
+
+            </div>
 
           </div>
 

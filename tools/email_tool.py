@@ -220,6 +220,55 @@ class EmailToolInput(BaseModel):
         description="Número máximo de emails a devolver.",
     )
 
+def connect_mailbox(folder: Optional[str] = None) -> imaplib.IMAP4_SSL:
+    """
+    Liga-se à caixa de correio configurada em .env (Gmail/IMAP genérico ou
+    Outlook/Microsoft 365 via OAuth2) e seleciona a pasta indicada.
+
+    Extraída para função de módulo (em vez de método privado do EmailTool)
+    para poder ser reutilizada por outras ferramentas que precisem de ler a
+    mesma caixa de correio — ex: CalendarTool, que procura convites de
+    calendário (.ics) dentro dos emails, usando exatamente a mesma ligação.
+    """
+    host = os.getenv("EMAIL_HOST")
+    port = int(os.getenv("EMAIL_PORT", 993))
+    username = os.getenv("EMAIL_USERNAME")
+    password = os.getenv("EMAIL_PASSWORD")
+    folder = folder or os.getenv("EMAIL_FOLDER", "INBOX")
+
+    if not host or not username:
+        raise RuntimeError("EMAIL_HOST ou EMAIL_USERNAME não configurados.")
+
+    mail = imaplib.IMAP4_SSL(host, port)
+
+    # Outlook / Microsoft 365
+    if "office365" in host or "outlook" in host:
+
+        token = get_access_token()
+
+        auth_string = (
+            f"user={username}\x01"
+            f"auth=Bearer {token}\x01\x01"
+        )
+
+        mail.authenticate(
+            "XOAUTH2",
+            lambda _: auth_string.encode()
+        )
+
+    # Gmail e outros servidores IMAP
+    else:
+
+        if not password:
+            raise RuntimeError("EMAIL_PASSWORD não configurada.")
+
+        mail.login(username, password)
+
+    mail.select(folder)
+
+    return mail
+
+
 class EmailTool(BaseTool):
     name: str = "EmailTool"
     description: str = (
@@ -235,43 +284,7 @@ class EmailTool(BaseTool):
     # Ligação IMAP
     # ------------------------------------------------------------------ #
     def _connect(self) -> imaplib.IMAP4_SSL:
-        host = os.getenv("EMAIL_HOST")
-        port = int(os.getenv("EMAIL_PORT", 993))
-        username = os.getenv("EMAIL_USERNAME")
-        password = os.getenv("EMAIL_PASSWORD")
-        folder = os.getenv("EMAIL_FOLDER", "INBOX")
-
-        if not host or not username:
-            raise RuntimeError("EMAIL_HOST ou EMAIL_USERNAME não configurados.")
-
-        mail = imaplib.IMAP4_SSL(host, port)
-
-        # Outlook / Microsoft 365
-        if "office365" in host or "outlook" in host:
-
-            token = get_access_token()
-
-            auth_string = (
-                f"user={username}\x01"
-                f"auth=Bearer {token}\x01\x01"
-            )
-
-            mail.authenticate(
-                "XOAUTH2",
-                lambda _: auth_string.encode()
-            )
-
-        # Gmail e outros servidores IMAP
-        else:
-
-            if not password:
-                raise RuntimeError("EMAIL_PASSWORD não configurada.")
-
-            mail.login(username, password)
-
-        mail.select(folder)
-
-        return mail
+        return connect_mailbox()
 
     # ------------------------------------------------------------------ #
     # Execução principal (chamada pelo agente CrewAI)

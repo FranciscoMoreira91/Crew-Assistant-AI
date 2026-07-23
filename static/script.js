@@ -108,6 +108,13 @@ async function loadSettings() {
         if (document.getElementById("ms_tenant_id"))
             document.getElementById("ms_tenant_id").value = config.MS_TENANT_ID || "";
 
+        // Agenda
+        if (document.getElementById("agenda_aviso_ativo"))
+            document.getElementById("agenda_aviso_ativo").value = config.AGENDA_AVISO_ATIVO || "false";
+
+        if (document.getElementById("agenda_aviso_hora"))
+            document.getElementById("agenda_aviso_hora").value = config.AGENDA_AVISO_HORA || "08:00";
+
         // SMTP
         if (document.getElementById("smtp_host"))
             document.getElementById("smtp_host").value = config.SMTP_HOST || "";
@@ -173,6 +180,9 @@ async function saveSettings() {
         email_password: "EMAIL_PASSWORD",
         ms_client_id: "MS_CLIENT_ID",
         ms_tenant_id: "MS_TENANT_ID",
+
+        agenda_aviso_ativo: "AGENDA_AVISO_ATIVO",
+        agenda_aviso_hora: "AGENDA_AVISO_HORA",
 
         smtp_host: "SMTP_HOST",
         smtp_port: "SMTP_PORT",
@@ -1044,8 +1054,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
+/* ---------------- Aviso diário de agenda ---------------- */
+
+// Ao carregar a página, pergunta ao backend se já existe um aviso de
+// agenda gerado pelo scheduler diário (ver AGENDA_BRIEFING em app.py) e,
+// se houver um novo (ainda não mostrado nesta janela/dia), apresenta-o no
+// chat como se fosse uma mensagem do assistente — sem o utilizador ter de
+// perguntar nada. Guarda o "gerado_em" do último aviso já mostrado em
+// localStorage para não repetir o mesmo aviso em cada refresh da página.
+async function mostrarAvisoAgendaDiario() {
+  try {
+    const response = await fetch("/api/agenda/briefing");
+    if (!response.ok) return;
+
+    const briefing = await response.json();
+    if (!briefing || !briefing.texto || !briefing.gerado_em) return;
+
+    const ultimoMostrado = localStorage.getItem("crew_agenda_aviso_mostrado");
+    if (ultimoMostrado === briefing.gerado_em) return; // já mostrado
+
+    removeEmptyState();
+    addMessage(`📅 ${briefing.texto}`, "assistant");
+    localStorage.setItem("crew_agenda_aviso_mostrado", briefing.gerado_em);
+  } catch (err) {
+    console.error("Erro ao verificar aviso diário de agenda:", err);
+  }
+}
+
 loadLanguage(currentLanguage);
 loadSettings();
+mostrarAvisoAgendaDiario();
+
+// Continua a verificar periodicamente enquanto a app está aberta, para
+// apanhar o aviso mesmo que o utilizador já tenha a página aberta antes
+// da hora configurada (sem isto, só apareceria num refresh posterior).
+setInterval(mostrarAvisoAgendaDiario, 60 * 1000);
 
 languageFlag.src=
 `/static/img/flags/${currentLanguage}.svg`;
