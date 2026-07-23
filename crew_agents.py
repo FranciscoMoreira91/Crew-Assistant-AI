@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 from logger import CrewLogger
 from datetime import datetime
 from tools.email_tool import EmailTool
+from tools.calendar_tool import CalendarTool
 import time
 
 from contextlib import redirect_stdout
@@ -110,6 +111,24 @@ def build_agents():
         llm=current_model,
     )
 
+    calendar_agent = Agent(
+        role="Assistente de Agenda",
+        goal=(
+            "Verificar a agenda real do utilizador utilizando exclusivamente "
+            "a CalendarTool e avisar sobre eventos de hoje, da semana, ou dos "
+            "próximos dias. Nunca inventa eventos, horas ou locais."
+        ),
+        backstory=(
+            "És responsável por manter o utilizador informado sobre a sua "
+            "agenda, lendo os convites de calendário que chegam à caixa de "
+            "correio (Google Calendar, Outlook/Teams, Zoom, etc.)."
+        ),
+        tools=[CalendarTool()],
+        allow_delegation=False,
+        verbose=True,
+        llm=current_model,
+    )
+
     redator = Agent(
         role="Redator Final",
         goal=(
@@ -127,11 +146,17 @@ def build_agents():
         llm=current_model,
     )
 
-    return coordenador, pesquisador, especialista, email_agent, redator
+    return coordenador, pesquisador, especialista, email_agent, calendar_agent, redator
 
 
-def build_tasks(user_message: str, history_text: str, language="pt", include_email: bool = False):
-    coordenador, pesquisador, especialista, email_agent, redator = build_agents()
+def build_tasks(
+    user_message: str,
+    history_text: str,
+    language="pt",
+    include_email: bool = False,
+    include_calendar: bool = False,
+):
+    coordenador, pesquisador, especialista, email_agent, calendar_agent, redator = build_agents()
 
     if language == "pt":
         language_instruction = (
@@ -213,7 +238,64 @@ def build_tasks(user_message: str, history_text: str, language="pt", include_ema
         return [tarefa_email, tarefa_redacao]
 
     # ------------------------------------------------------------------ #
-    # Pipeline normal (sem email)
+    # Pedidos de agenda: pipeline dedicado e curto, pelo mesmo motivo do
+    # pipeline de email — Coordenador/Pesquisador/Especialista não têm
+    # acesso à agenda real e não devem "exemplificar" eventos inventados.
+    # ------------------------------------------------------------------ #
+    if include_calendar:
+        tarefa_calendario = Task(
+            description=(
+                f"{language_instruction}\n\n"
+                f"Mensagem do humano: {user_message}\n\n"
+                + (f"Contexto adicional (histórico e/ou mensagem a que o "
+                   f"humano está a responder):\n{history_text}\n\n" if history_text else "")
+                + "É obrigatório responder chamando a CalendarTool — nunca "
+                "respondas com conhecimento próprio nem inventes eventos, "
+                "horas ou locais. Analisa o pedido do humano e escolhe a "
+                "operação certa (operation='hoje' se falar em hoje/agenda de "
+                "hoje; 'semana' se falar na semana; 'proximos_dias' com o "
+                "campo 'dias' se indicar um número de dias). Devolve "
+                "exatamente o resultado devolvido pela ferramenta, sem "
+                "adicionar exemplos, suposições ou dados que não vieram da "
+                "ferramenta. Se a ferramenta falhar, responde apenas com "
+                "esse erro tal como veio, nunca inventes um resultado "
+                "alternativo."
+            ),
+            expected_output=(
+                "O resultado exato devolvido pela CalendarTool (lista real "
+                "de eventos, mensagem de 'sem eventos', ou erro real) — "
+                "nunca um exemplo, suposição ou evento inventado."
+            ),
+            agent=calendar_agent,
+        )
+
+        tarefa_redacao_agenda = Task(
+            description=(
+                f"{language_instruction}\n\n"
+                """Pega EXATAMENTE no resultado devolvido pelo Assistente de
+                Agenda (tarefa anterior) e reescreve-o numa resposta final
+                clara e simpática para o humano.
+
+                REGRAS ABSOLUTAS:
+                - Nunca inventes, arredondes, estimes ou "exemplifiques"
+                  eventos, horas, datas ou locais que não estejam
+                  literalmente no resultado do Assistente de Agenda.
+                - Se o Assistente de Agenda reportou um erro, a tua resposta
+                  final tem de comunicar esse erro claramente ao humano —
+                  nunca o substituas por um resultado inventado.
+                - Escreve exclusivamente no idioma indicado acima.
+                - Não menciones os outros agentes nem o processo interno.
+                """
+            ),
+            expected_output="Resposta final, fiel ao resultado real da CalendarTool, pronta a mostrar ao humano.",
+            agent=redator,
+            context=[tarefa_calendario],
+        )
+
+        return [tarefa_calendario, tarefa_redacao_agenda]
+
+    # ------------------------------------------------------------------ #
+    # Pipeline normal (sem email nem agenda)
     # ------------------------------------------------------------------ #
 
 
@@ -286,6 +368,7 @@ def run_crew(
     logger=None,
     task_callback=None,
     include_email: bool = False,
+    include_calendar: bool = False,
 ):
     """
     Executa a crew de forma síncrona e devolve a resposta final (string).
@@ -293,6 +376,9 @@ def run_crew(
     concluída, permitindo emitir progresso em tempo real (ex: via SSE).
     `include_email`, se True, adiciona o Assistente de Email ao pipeline
     (só deve ser True quando o pedido do humano é claramente sobre email).
+    `include_calendar`, se True, adiciona o Assistente de Agenda ao pipeline
+    (só deve ser True quando o pedido do humano é claramente sobre agenda/
+    eventos/reuniões).
     """
 
     if logger is None:
@@ -303,6 +389,7 @@ def run_crew(
         history_text=history_text,
         language=language,
         include_email=include_email,
+        include_calendar=include_calendar,
     )
 
     crew = Crew(

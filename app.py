@@ -34,6 +34,7 @@ from tools.ocr_tool import images_to_searchable_pdf, PDF_DIR
 from tools.image_tool import ImageTool, IMAGENS_DIR
 from tools.video_tool import VideoTool, VIDEOS_DIR
 from tools.attachment_tool import extract_attachment_text
+from tools.calendar_tool import CalendarTool
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(BASE_DIR, ".env")
@@ -48,12 +49,20 @@ CORS(app)
 # Em produção, substituir por uma base de dados ou cache (ex: Redis).
 CONVERSATIONS = {}
 
+# Último aviso de agenda gerado pelo scheduler diário (ver
+# verificar_agenda_diaria() e reconfigurar_scheduler_agenda() mais abaixo).
+# O frontend consulta isto uma vez ao carregar a página (GET
+# /api/agenda/briefing) para mostrar o aviso de "eventos de hoje" sem
+# o utilizador ter de perguntar.
+AGENDA_BRIEFING = {"gerado_em": None, "texto": None}
+
 AGENT_LABELS = {
     "Coordenador de Atendimento": "🧭 Coordenador a analisar o pedido...",
     "Pesquisador": "🔎 Pesquisador a reunir informação...",
     "Especialista Técnico": "🛠️ Especialista a preparar o conteúdo técnico...",
     "Redator Final": "✍️ Redator a escrever a resposta final...",
     "Assistente de Email": "📧 A verificar o email...",
+    "Assistente de Agenda": "📅 A verificar a agenda...",
     "Especialista em Geração de Imagens por Inteligência Artificial": "🎨 A gerar a imagem...",
 }
 
@@ -67,6 +76,14 @@ IMAGE_KEYWORDS = (
     "criar uma imagem", "desenha", "desenhar", "ilustra", "ilustração",
     "faz um desenho", "fazer um desenho", "imagem de", "foto de",
     "draw", "generate an image", "create an image", "picture of", "sketch",
+)
+
+CALENDAR_KEYWORDS = (
+    "agenda", "calendário", "calendario", "eventos de hoje",
+    "compromissos", "reuniões", "reunioes", "reunião", "reuniao",
+    "o que tenho hoje", "o que tenho marcado", "tenho algo marcado",
+    "convite de calendário", "convite de calendario",
+    "calendar", "schedule", "meetings", "appointments", "what do i have today",
 )
 
 VIDEO_KEYWORDS = (
@@ -108,6 +125,9 @@ CONFIG_KEYS = {
     "ANTHROPIC_API_KEY",
     "HF_TOKEN",
     "FAL_KEY",
+
+    "AGENDA_AVISO_ATIVO",
+    "AGENDA_AVISO_HORA",
 }
 
 MAX_OCR_CONTEXT_CHARS = 4000
@@ -123,6 +143,11 @@ def is_email_request(message):
     )
 
 
+def is_calendar_request(message: str) -> bool:
+    m = message.lower()
+    return any(keyword in m for keyword in CALENDAR_KEYWORDS)
+
+
 def is_image_request(message: str) -> bool:
     m = message.lower()
     return any(keyword in m for keyword in IMAGE_KEYWORDS)
@@ -131,6 +156,118 @@ def is_image_request(message: str) -> bool:
 def is_video_request(message: str) -> bool:
     m = message.lower()
     return any(keyword in m for keyword in VIDEO_KEYWORDS)
+
+
+def verificar_agenda_diaria():
+    """
+    Corre em segundo plano (ver reconfigurar_scheduler_agenda()), uma vez por
+    dia, à hora configurada em AGENDA_AVISO_HORA. Chama a CalendarTool
+    diretamente (sem passar pela crew completa de agentes — não há
+    utilizador à espera de resposta em tempo real, e poupa chamadas ao LLM)
+    e guarda o resultado em AGENDA_BRIEFING para o frontend consultar.
+
+    Tenta também mostrar uma notificação nativa do sistema (Windows), se a
+    biblioteca opcional 'win10toast' estiver instalada — mas nunca falha
+    por causa disso: a app continua a funcionar sem notificações de
+    secretária, o frontend fica na mesma com o aviso disponível via
+    GET /api/agenda/briefing.
+    """
+    try:
+        texto = CalendarTool()._run(operation="hoje")
+    except Exception as exc:  # noqa: BLE001
+        texto = f"Não consegui verificar a agenda de hoje. Detalhe: {exc}"
+
+    AGENDA_BRIEFING["texto"] = texto
+    AGENDA_BRIEFING["gerado_em"] = datetime.now().isoformat()
+
+    # Mostra o aviso na consola tal como o Assistente de Agenda o "diria"
+    # no chat — não só um log técnico, mas o próprio texto, com a mesma
+    # etiqueta usada nos avisos de progresso do chat (ver AGENT_LABELS).
+    print(f"\n📅 Assistente de Agenda: {texto}\n")
+
+    try:
+        from win10toast import ToastNotifier  # opcional, só existe no Windows
+        ToastNotifier().show_toast(
+            "Crew Assistant AI — Agenda de hoje",
+            texto[:250],
+            duration=10,
+            threaded=True,
+        )
+    except Exception:
+        # Sem 'win10toast' instalado, ou fora do Windows: não é um erro,
+        # apenas não há notificação de secretária. O aviso continua
+        # disponível para o frontend via /api/agenda/briefing.
+        pass
+
+
+_AGENDA_SCHEDULER = None
+# Instância única do BackgroundScheduler, criada uma só vez (na primeira
+# chamada a reconfigurar_scheduler_agenda()) e reutilizada durante toda a
+# vida do processo. Guardá-la aqui — em vez de a criar e "esquecer" dentro
+# da função, como acontecia antes — é o que permite reconfigurar o aviso
+# diário (ativar/desativar, mudar a hora) a partir das Definições sem
+# reiniciar a app: mexe-se sempre na mesma instância já a correr.
+
+
+def reconfigurar_scheduler_agenda():
+    """
+    (Re)configura o job do aviso diário de agenda a partir dos valores
+    ATUAIS de AGENDA_AVISO_ATIVO / AGENDA_AVISO_HORA em os.environ.
+
+    Chamada tanto no arranque da app como sempre que o utilizador guarda
+    as Definições (ver /update-config) — por isso ativar/desativar o
+    aviso, ou mudar a hora, tem efeito imediato, sem reiniciar a app:
+      - se ativo=false -> remove o job, se existir (para de avisar já,
+        sem ser preciso desligar a app).
+      - se ativo=true  -> cria/atualiza o job com a hora atual
+        (replace_existing=True substitui a hora antiga em vez de
+        duplicar jobs).
+
+    Usa APScheduler (BackgroundScheduler) — corre numa thread própria,
+    sem bloquear o Flask nem exigir infraestrutura extra (cron, Celery,
+    etc.), adequado ao uso local/desktop desta app.
+    """
+    global _AGENDA_SCHEDULER
+
+    ativo = os.getenv("AGENDA_AVISO_ATIVO", "false").strip().lower() in ("true", "1", "sim", "yes")
+
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+    except ImportError:
+        if ativo:
+            print(
+                "[Agenda] AGENDA_AVISO_ATIVO=true mas a biblioteca 'apscheduler' "
+                "não está instalada. Adiciona 'apscheduler' ao requirements.txt "
+                "e corre 'pip install apscheduler'."
+            )
+        return
+
+    if _AGENDA_SCHEDULER is None:
+        _AGENDA_SCHEDULER = BackgroundScheduler(daemon=True)
+        _AGENDA_SCHEDULER.start()
+
+    if not ativo:
+        if _AGENDA_SCHEDULER.get_job("agenda_diaria"):
+            _AGENDA_SCHEDULER.remove_job("agenda_diaria")
+            print("[Agenda] Aviso diário de agenda desativado.")
+        return
+
+    hora_texto = os.getenv("AGENDA_AVISO_HORA", "08:00").strip()
+    try:
+        hora, minuto = (int(p) for p in hora_texto.split(":"))
+    except ValueError:
+        print(f"[Agenda] AGENDA_AVISO_HORA inválida ('{hora_texto}'), a usar 08:00.")
+        hora, minuto = 8, 0
+
+    _AGENDA_SCHEDULER.add_job(
+        verificar_agenda_diaria,
+        trigger="cron",
+        hour=hora,
+        minute=minuto,
+        id="agenda_diaria",
+        replace_existing=True,
+    )
+    print(f"[Agenda] Aviso diário de agenda ativo às {hora:02d}:{minuto:02d}.")
 
 
 def get_history_text(session_id: str) -> str:
@@ -324,6 +461,13 @@ def update_config():
             override=True
         )
 
+        # Se as Definições mudaram algo da Agenda (ativar/desativar o
+        # aviso diário, ou a hora), aplica de imediato ao scheduler já em
+        # execução — sem isto, a alteração só teria efeito depois de
+        # reiniciar a app.
+        if "AGENDA_AVISO_ATIVO" in data or "AGENDA_AVISO_HORA" in data:
+            reconfigurar_scheduler_agenda()
+
         return jsonify({
             "status": "success",
             "message": "Configurações guardadas com sucesso."
@@ -373,9 +517,24 @@ def get_config():
         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
         "HF_TOKEN": os.getenv("HF_TOKEN", ""),
         "FAL_KEY": os.getenv("FAL_KEY", ""),
-        "REPLICATE_API_TOKEN": os.getenv("REPLICATE_API_TOKEN", "")
+        "REPLICATE_API_TOKEN": os.getenv("REPLICATE_API_TOKEN", ""),
+
+        "AGENDA_AVISO_ATIVO": os.getenv("AGENDA_AVISO_ATIVO", "false"),
+        "AGENDA_AVISO_HORA": os.getenv("AGENDA_AVISO_HORA", "08:00"),
 
     })
+
+@app.route("/api/agenda/briefing", methods=["GET"])
+def agenda_briefing():
+    """
+    Devolve o último aviso de agenda gerado pelo scheduler diário (ver
+    verificar_agenda_diaria()). O frontend chama isto uma vez ao carregar
+    a página para mostrar o aviso de eventos de hoje sem o utilizador ter
+    de perguntar. Se o scheduler ainda não tiver corrido (ou estiver
+    desativado), devolve texto=null.
+    """
+    return jsonify(AGENDA_BRIEFING)
+
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -479,11 +638,15 @@ def chat():
     logger = CrewLogger(session_id)
     logger.user(user_message)
 
+    _pedido_email = is_email_request(user_message) and not (image_urls or other_files)
+    _pedido_agenda = is_calendar_request(user_message) and not (image_urls or other_files)
+
     resposta = run_crew(
         user_message,
         history_text,
         logger=logger,
-        include_email=is_email_request(user_message) and not (image_urls or other_files),
+        include_email=_pedido_email,
+        include_calendar=_pedido_agenda and not _pedido_email,
     )
     save_message(session_id, "assistant", resposta)
 
@@ -610,13 +773,17 @@ def chat_stream():
 
             logger.user(user_message)
 
+            _pedido_email = is_email_request(user_message) and not (image_urls or other_files)
+            _pedido_agenda = is_calendar_request(user_message) and not (image_urls or other_files)
+
             resposta = run_crew(
                 user_message,
                 history_text,
                 language=language,
                 logger=logger,
                 task_callback=task_callback,
-                include_email=is_email_request(user_message) and not (image_urls or other_files),
+                include_email=_pedido_email,
+                include_calendar=_pedido_agenda and not _pedido_email,
             )
             save_message(session_id, "assistant", resposta)
             q.put({"type": "final", "reply": resposta, "session_id": session_id})
@@ -653,4 +820,11 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     debug = os.getenv("FLASK_DEBUG", "false").strip().lower() in ("true", "1", "sim", "yes")
     host = os.getenv("FLASK_HOST", "127.0.0.1")
+
+    # Em modo debug o Werkzeug reinicia o processo num sub-processo próprio
+    # (reloader); sem esta verificação, o scheduler arrancaria em duplicado
+    # (uma vez no processo pai, outra no filho).
+    if not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        reconfigurar_scheduler_agenda()
+
     app.run(host=host, port=port, debug=debug)
