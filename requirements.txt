@@ -14,4 +14,6 @@ python-docx
 python-pptx
 icalendar
 apscheduler
+ddgs                # pesquisa na Web via DuckDuckGo, sem chave de API
+beautifulsoup4       # leitura/limpeza de páginas para a WebSearchTool
 win10toast   # opcional: ativa notificações nativas do Windows para o aviso diário de agenda

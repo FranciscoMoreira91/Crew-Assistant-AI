@@ -31,6 +31,7 @@ from logger import CrewLogger
 from datetime import datetime
 from tools.email_tool import EmailTool
 from tools.calendar_tool import CalendarTool
+from tools.websearch_tool import WebSearchTool
 import time
 
 from contextlib import redirect_stdout
@@ -45,7 +46,7 @@ load_dotenv()
 # ex: "claude-sonnet-4-6".
 
 
-def build_agents():
+def build_agents(search_progress_callback=None):
     current_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
     coordenador = Agent(
         role="Coordenador de Atendimento",
@@ -68,14 +69,20 @@ def build_agents():
     pesquisador = Agent(
         role="Pesquisador",
         goal=(
-            "Reunir e organizar a informação, factos e contexto necessários "
-            "para responder ao pedido do humano com rigor."
+            "Reunir e organizar informação real e atual para responder ao "
+            "pedido do humano com rigor, usando SEMPRE a WebSearchTool para "
+            "pesquisar na Web (ou, se o humano indicou um URL, para ler e "
+            "resumir essa página) — nunca inventar factos, preços, datas ou "
+            "notícias a partir de conhecimento próprio desatualizado."
         ),
         backstory=(
-            "És meticuloso e gostas de confirmar factos antes de os passar "
-            "adiante. Trabalhas a partir do plano do Coordenador e entregas "
-            "informação estruturada e sem rodeios ao Especialista."
+            "És meticuloso e só confias em factos que consegues confirmar "
+            "numa fonte real. Trabalhas a partir do plano do Coordenador, "
+            "pesquisas na Web (ou lês o URL indicado pelo humano) através "
+            "da WebSearchTool, e entregas ao Especialista a informação "
+            "estruturada por tópicos, sempre com os URLs das fontes usadas."
         ),
+        tools=[WebSearchTool(progress_callback=search_progress_callback)],
         allow_delegation=False,
         verbose=True,
         llm=current_model,
@@ -155,8 +162,11 @@ def build_tasks(
     language="pt",
     include_email: bool = False,
     include_calendar: bool = False,
+    search_progress_callback=None,
 ):
-    coordenador, pesquisador, especialista, email_agent, calendar_agent, redator = build_agents()
+    coordenador, pesquisador, especialista, email_agent, calendar_agent, redator = build_agents(
+        search_progress_callback=search_progress_callback
+    )
 
     if language == "pt":
         language_instruction = (
@@ -313,11 +323,29 @@ def build_tasks(
     tarefa_pesquisa = Task(
         description=(
             f"{language_instruction}\n\n"
+            f"Mensagem original do humano: {user_message}\n\n"
             "Com base no plano do Coordenador, reúne a informação, factos e "
             "contexto relevantes para o pedido original do humano. "
-            "Sê objetivo e organiza a informação por tópicos."
+            "\n\n"
+            "É OBRIGATÓRIO chamar a WebSearchTool pelo menos uma vez antes "
+            "de responderes:\n"
+            "- Se a mensagem do humano contiver um URL, usa "
+            "operation='resumir_pagina' com esse url.\n"
+            "- Caso contrário, usa operation='pesquisar' com uma query "
+            "objetiva construída a partir do pedido do humano.\n"
+            "Nunca inventes factos, notícias, preços ou datas a partir de "
+            "conhecimento próprio — usa sempre o resultado real devolvido "
+            "pela ferramenta. Se a ferramenta não devolver resultados úteis "
+            "ou falhar, diz isso claramente em vez de inventar.\n\n"
+            "Sê objetivo, organiza a informação por tópicos e termina "
+            "sempre com uma secção 'Fontes:' listando os URLs reais "
+            "devolvidos pela ferramenta que foram usados."
         ),
-        expected_output="Informação organizada por tópicos, pronta a ser usada.",
+        expected_output=(
+            "Informação organizada por tópicos, baseada nos resultados "
+            "reais da WebSearchTool, terminando com uma lista de Fontes "
+            "(URLs)."
+        ),
         agent=pesquisador,
         context=[tarefa_coordenacao],
     )
@@ -347,6 +375,11 @@ def build_tasks(
             - natural;
             - escrita exclusivamente no idioma indicado acima.
 
+            Se o Pesquisador indicou fontes/URLs reais (secção 'Fontes:'),
+            mantém-nas no fim da tua resposta final, para o humano poder
+            confirmar a informação. Nunca inventes URLs que não vieram do
+            Pesquisador.
+
             Nunca mudes de idioma.
             Nunca mistures Português e Inglês.
             Não menciones os outros agentes nem o processo interno da equipa.
@@ -369,6 +402,7 @@ def run_crew(
     task_callback=None,
     include_email: bool = False,
     include_calendar: bool = False,
+    search_progress_callback=None,
 ):
     """
     Executa a crew de forma síncrona e devolve a resposta final (string).
@@ -379,6 +413,9 @@ def run_crew(
     `include_calendar`, se True, adiciona o Assistente de Agenda ao pipeline
     (só deve ser True quando o pedido do humano é claramente sobre agenda/
     eventos/reuniões).
+    `search_progress_callback`, se fornecido, é chamado pela WebSearchTool
+    com cada URL assim que é encontrado/aberto, para o frontend poder
+    mostrar em tempo real os sites que o Pesquisador está a consultar.
     """
 
     if logger is None:
@@ -390,6 +427,7 @@ def run_crew(
         language=language,
         include_email=include_email,
         include_calendar=include_calendar,
+        search_progress_callback=search_progress_callback,
     )
 
     crew = Crew(

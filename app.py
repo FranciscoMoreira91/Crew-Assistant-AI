@@ -22,6 +22,16 @@ import threading
 import uuid
 import traceback
 
+# Desativa a telemetria (anónima) do CrewAI. Sem isto, sempre que os agentes
+# trabalham, a biblioteca tenta enviar dados de utilização para os
+# servidores da CrewAI através de OTLP; se a rede/firewall bloquear esse
+# envio, aparecem avisos "Transient error Service Unavailable... retrying"
+# na consola. Isto não afeta o funcionamento da app — são só avisos — mas
+# têm de ser desativados ANTES de importar crew_agents (que importa a
+# biblioteca crewai), daí estar logo no topo do ficheiro.
+os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
 from logger import CrewLogger
 from datetime import datetime
 from dotenv import load_dotenv, set_key
@@ -58,7 +68,7 @@ AGENDA_BRIEFING = {"gerado_em": None, "texto": None}
 
 AGENT_LABELS = {
     "Coordenador de Atendimento": "🧭 Coordenador a analisar o pedido...",
-    "Pesquisador": "🔎 Pesquisador a reunir informação...",
+    "Pesquisador": "🔎 Pesquisador a pesquisar na Web...",
     "Especialista Técnico": "🛠️ Especialista a preparar o conteúdo técnico...",
     "Redator Final": "✍️ Redator a escrever a resposta final...",
     "Assistente de Email": "📧 A verificar o email...",
@@ -102,6 +112,10 @@ CONFIG_KEYS = {
 
     "VIDEO_PROVIDER",
     "VIDEO_MODEL",
+
+    "SEARCH_PROVIDER",
+    "SERPER_API_KEY",
+    "TAVILY_API_KEY",
 
     "OCR_ENABLED",
     "OCR_LANGUAGE",
@@ -690,6 +704,13 @@ def chat_stream():
         label = AGENT_LABELS.get(agent_role, f"{agent_role} a trabalhar...")
         q.put({"type": "progress", "agent": agent_role, "label": label})
 
+    def search_progress_callback(url):
+        # Chamado pela WebSearchTool (ver tools/websearch_tool.py) em tempo
+        # real, com cada site que o Pesquisador está a consultar, para o
+        # frontend mostrar isso ao utilizador enquanto espera a resposta
+        # final (caixa por baixo da barra de progresso dos agentes).
+        q.put({"type": "search_progress", "url": url})
+
     def worker():
         try:
             extra_context = ""
@@ -784,6 +805,7 @@ def chat_stream():
                 task_callback=task_callback,
                 include_email=_pedido_email,
                 include_calendar=_pedido_agenda and not _pedido_email,
+                search_progress_callback=search_progress_callback,
             )
             save_message(session_id, "assistant", resposta)
             q.put({"type": "final", "reply": resposta, "session_id": session_id})
