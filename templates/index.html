@@ -122,6 +122,14 @@
             <span class="relay__label" data-i18n="copywriter">Redator</span>
           </div>
         </div>
+
+        <div class="search-sites" id="searchSitesBox" hidden>
+          <div class="search-sites__title">
+            <span class="search-sites__icon">🌐</span>
+            <span data-i18n="searching-web">A pesquisar na Web...</span>
+          </div>
+          <ul class="search-sites__list" id="searchSitesList"></ul>
+        </div>
       </header>
 
       <main class="chat" id="chat">
@@ -221,6 +229,10 @@
 
           <button class="settings-tab-btn" data-tab="ocr">
             🔍 OCR
+          </button>
+
+          <button class="settings-tab-btn" data-tab="search">
+            🌐 Pesquisa
           </button>
 
           <button class="settings-tab-btn" data-tab="email">
@@ -368,6 +380,56 @@
                 <option value="fra">Francês</option>
 
               </select>
+
+            </div>
+
+          </div>
+
+          <!-- Pesquisa -->
+          <div class="settings-tab" id="tab-search">
+
+            <h3>🌐 Pesquisa na Web</h3>
+
+            <p class="settings-description">
+              O agente Pesquisador usa isto para pesquisar informação real e atual na Internet,
+              ou para resumir uma página a partir de um URL indicado por si.
+            </p>
+
+            <div class="setting-group">
+
+              <label>Provider</label>
+
+              <select id="search_provider">
+
+                <option value="duckduckgo">duckduckgo (sem chave de API)</option>
+                <option value="serper">serper</option>
+                <option value="tavily">tavily</option>
+
+              </select>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Serper API Key</label>
+
+              <input id="serper_api_key" type="password" placeholder="chave do serper.dev">
+
+              <small class="settings-description">
+                Necessário apenas se escolher o provider "serper". Obtenha uma chave gratuita em serper.dev.
+              </small>
+
+            </div>
+
+            <div class="setting-group">
+
+              <label>Tavily API Key</label>
+
+              <input id="tavily_api_key" type="password" placeholder="chave do tavily.com">
+
+              <small class="settings-description">
+                Necessário apenas se escolher o provider "tavily". Obtenha uma chave gratuita em tavily.com.
+              </small>
 
             </div>
 

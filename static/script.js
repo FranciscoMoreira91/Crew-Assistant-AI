@@ -12,6 +12,8 @@ const composerEl = document.getElementById('composer');
 const inputEl = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const relayProgressEl = document.getElementById('relayProgress');
+const searchSitesBoxEl = document.getElementById('searchSitesBox');
+const searchSitesListEl = document.getElementById('searchSitesList');
 const attachBtn = document.getElementById('attachBtn');
 const fileInput = document.getElementById('fileInput');
 const attachmentsPreviewEl = document.getElementById('attachmentsPreview');
@@ -144,6 +146,10 @@ async function loadSettings() {
         if (document.getElementById("replicate_api_token"))
             document.getElementById("replicate_api_token").value = config.REPLICATE_API_TOKEN || "";
 
+            document.getElementById("search_provider").value = config.SEARCH_PROVIDER || "duckduckgo";
+            document.getElementById("serper_api_key").value = config.SERPER_API_KEY || "";
+            document.getElementById("tavily_api_key").value = config.TAVILY_API_KEY || "";
+
     }
     catch (err) {
 
@@ -194,6 +200,10 @@ async function saveSettings() {
         hf_token: "HF_TOKEN",
         fal_key: "FAL_KEY",
         replicate_api_token: "REPLICATE_API_TOKEN",
+
+        search_provider: "SEARCH_PROVIDER",
+        serper_api_key: "SERPER_API_KEY",
+        tavily_api_key: "TAVILY_API_KEY",
     };
 
     const settings = {};
@@ -494,6 +504,8 @@ function resetRelay() {
 
   });
 
+  hideSearchSites();
+
 }
 
 function setNodeActive(key) {
@@ -518,6 +530,39 @@ function markNodeDone(key) {
 
   const nextKey = NODE_ORDER[idx + 1];
   if (nextKey) setNodeActive(nextKey);
+}
+
+/* ---------------- Caixa de sites a ser pesquisados (tempo real) ---------------- */
+
+let searchSitesVistos = new Set();
+
+function showSearchSite(url) {
+  let texto = url;
+  try {
+    texto = new URL(url).hostname.replace(/^www\./, '');
+  } catch (e) {
+    // URL inválido/incompleto: mostra tal como veio
+  }
+
+  // Evita repetir o mesmo site na lista se o agente o consultar mais do que uma vez.
+  if (searchSitesVistos.has(texto)) return;
+  searchSitesVistos.add(texto);
+
+  const li = document.createElement('li');
+  li.textContent = texto;
+  searchSitesListEl.appendChild(li);
+  searchSitesListEl.scrollTop = searchSitesListEl.scrollHeight;
+
+  searchSitesBoxEl.hidden = false;
+  // Pequeno atraso para o browser aplicar a transição de opacidade/posição.
+  requestAnimationFrame(() => searchSitesBoxEl.classList.add('search-sites--visible'));
+}
+
+function hideSearchSites() {
+  searchSitesBoxEl.classList.remove('search-sites--visible');
+  searchSitesBoxEl.hidden = true;
+  searchSitesListEl.innerHTML = '';
+  searchSitesVistos = new Set();
 }
 
 /* ---------------- Chat helpers ---------------- */
@@ -942,7 +987,11 @@ async function sendMessage(message, attachments, replyTo) {
         if (payload.type === 'progress') {
           const nodeKey = AGENT_ROLE_TO_NODE[payload.agent];
           if (nodeKey) markNodeDone(nodeKey);
+          if (nodeKey === 'pesquisador') hideSearchSites();
           progressEl.textContent = payload.label;
+          scrollToBottom();
+        } else if (payload.type === 'search_progress') {
+          showSearchSite(payload.url);
           scrollToBottom();
         } else if (payload.type === 'image_progress' || payload.type === 'video_progress' || payload.type === 'attachment_progress') {
           progressEl.textContent = payload.label;
@@ -953,6 +1002,7 @@ async function sendMessage(message, attachments, replyTo) {
           sessionId = payload.session_id;
           localStorage.setItem('crew_session_id', sessionId);
 
+          hideSearchSites();
           progressEl.remove();
 
           addMessage(payload.reply, "assistant");
@@ -967,6 +1017,7 @@ async function sendMessage(message, attachments, replyTo) {
           sessionId = payload.session_id;
           localStorage.setItem('crew_session_id', sessionId);
 
+          hideSearchSites();
           progressEl.remove();
 
           addImageMessage(payload.image_base64, payload.prompt_used, payload.download_url);
@@ -979,6 +1030,7 @@ async function sendMessage(message, attachments, replyTo) {
           sessionId = payload.session_id;
           localStorage.setItem('crew_session_id', sessionId);
 
+          hideSearchSites();
           progressEl.remove();
 
           addVideoMessage(payload.video_url);
@@ -988,12 +1040,14 @@ async function sendMessage(message, attachments, replyTo) {
             text: "[Vídeo gerado]"
           });
         } else if (payload.type === 'error') {
+          hideSearchSites();
           progressEl.remove();
           addMessage('Ocorreu um erro: ' + payload.message, 'assistant');
         }
       }
     }
   } catch (err) {
+    hideSearchSites();
     progressEl.remove();
     addMessage('Não foi possível ligar ao servidor. Verifica se o backend Flask está a correr.', 'assistant');
   } finally {
